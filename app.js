@@ -3,25 +3,11 @@ let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resou
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[];
 const shuffle=a=>a.map(x=>[Math.random(),x]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
 async function loadAll(){
-  try{const s=await db.collection("config").doc("main").get();if(s.exists)SET=Object.assign(SET,s.data())}catch(e){}
-  // Alphanumeric sorting: Numbers (0-9) first, then Alphabet (A-Z)
-  const ord = a => a.sort((x, y) => {
-    const nameX = (x.name || x.title || "").toString();
-    const nameY = (y.name || y.title || "").toString();
-    return nameX.localeCompare(nameY, undefined, { numeric: true, sensitivity: 'base' });
-  });
-  const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
-  // Fetch and sort all collections
-  COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
-  LESSONS=ord(await grab("lessons"));
-  QUESTIONS=await grab("questions");
-  BOOKS=ord(await grab("books"));
-  SITES=ord(await grab("sites"));
-  TILES=ord(await grab("tiles"));
-  document.getElementById("brandLink").innerHTML=(SET.logoUrl?`<img src="${esc(SET.logoUrl)}" alt="logo" style="height:30px;vertical-align:middle;margin-right:8px;border-radius:6px">`:"")+esc(SET.heroTitle||"Development Allies BD");
-  document.title=SET.heroTitle||"Development Allies BD"; 
-  route(); // Displays the loaded & sorted content
-}
+ try{const s=await db.collection("config").doc("main").get();if(s.exists)SET=Object.assign(SET,s.data())}catch(e){}
+ const ord=a=>a.sort((x,y)=>(x.order||0)-(y.order||0));
+ const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
+ COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
+ LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");
  document.getElementById("brandLink").innerHTML=(SET.logoUrl?`<img src="${esc(SET.logoUrl)}" alt="logo" style="height:30px;vertical-align:middle;margin-right:8px;border-radius:6px">`:"")+esc(SET.heroTitle||"Development Allies BD");
  document.title=SET.heroTitle||"Development Allies BD";
  route()}
