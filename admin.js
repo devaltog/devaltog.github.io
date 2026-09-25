@@ -2,7 +2,7 @@ const app=document.getElementById("app"),who=document.getElementById("who");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const v=id=>(document.getElementById(id)||{value:""}).value.trim();
 const cb=id=>!!(document.getElementById(id)||{}).checked;
-let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],TILES=[],SET={};
+let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],SET={};
 let EDIT={course:null,lesson:null,question:null,book:null,site:null};
 let mopts=[["",""],["",""],["",""]]; // matching rows while building a question
 auth.onAuthStateChanged(u=>{if(u){who.textContent=u.email;loadAll()}else{who.textContent="";renderLogin()}});
@@ -12,10 +12,10 @@ function doLogin(){auth.signInWithEmailAndPassword(v("em"),v("pw")).catch(e=>doc
 function logout(){auth.signOut()}
 async function loadAll(){
  const grab=async n=>{const q=await db.collection(n).get();return q.docs.map(d=>({id:d.id,...d.data()}))};
- [COURSES,LESSONS,QUESTIONS,BOOKS,SITES,CATS,TILES]=await Promise.all(["courses","lessons","questions","books","sites","categories","tiles"].map(grab));
+ [COURSES,LESSONS,QUESTIONS,BOOKS,SITES,CATS,LCATS,TILES]=await Promise.all(["courses","lessons","questions","books","sites","categories","linkcats","tiles"].map(grab));
  const s=await db.collection("config").doc("main").get();SET=s.exists?s.data():{heroTitle:"Development Allies BD",heroText:"",showBooks:true,showSites:true};
  renderShell(window.__sec||"settings")}
-const NAV=[["settings","Site Settings"],["courses","Courses"],["lessons","Lessons"],["questions","Questions"],["categories","Book Categories"],["books","Books"],["sites","Useful Websites"],["tiles","Homepage Tiles"]];
+const NAV=[["settings","Site Settings"],["courses","Courses"],["lessons","Lessons"],["questions","Questions"],["categories","Book Categories"],["books","Books"],["linkcats","Link Categories"],["sites","Links"],["tiles","Homepage Tiles"]];
 function renderShell(sec){window.__sec=sec;app.innerHTML=`<div class="dash"><aside class="card">${NAV.map(x=>`<a href="javascript:renderShell('${x[0]}')" class="${x[0]==sec?"on":""}">${x[1]}</a>`).join("")}<a href="javascript:logout()" style="color:#ff9a9a">Log out</a></aside><div id="panel"></div></div>`;
  document.getElementById("panel").innerHTML=PANEL[sec]()}
 const panel=(t,form,list)=>`<h2>${esc(t)}</h2><div class="card">${form}</div><div class="list">${list||"<p class=muted>Nothing yet.</p>"}</div>`;
@@ -31,10 +31,13 @@ PANEL.settings=()=>`<h2>Site Settings</h2><div class="card list">
 <label>Homepage welcome text (short, under the title)<br><textarea id="s2" rows="2" style="width:100%">${esc(SET.heroText||"")}</textarea></label>
 <label>About / narrative heading<br><input id="s5" value="${esc(SET.aboutTitle||"")}" style="width:100%"></label>
 <label>About / narrative text (longer story about your training, shown on Home)<br><textarea id="s6" rows="5" style="width:100%">${esc(SET.aboutText||"")}</textarea></label>
+<label>Small logo — paste an image link (top-left, next to your site name)<br><input id="s7" placeholder="https://... (image link)" value="${esc(SET.logoUrl||"")}" style="width:100%"></label>
+<label>Homepage image — paste an image link (shown below the welcome text)<br><input id="s8" placeholder="https://... (image link)" value="${esc(SET.heroImageUrl||"")}" style="width:100%"></label>
 <label><input type="checkbox" id="s3" ${SET.showBooks!==false?"checked":""}> Show Books section</label>
-<label><input type="checkbox" id="s4" ${SET.showSites!==false?"checked":""}> Show Useful Websites section</label>
-<button class="btn" onclick="saveSettings()">Save</button></div>`;
-async function saveSettings(){await db.collection("config").doc("main").set({heroTitle:v("s1"),heroText:v("s2"),aboutTitle:v("s5"),aboutText:v("s6"),showBooks:cb("s3"),showSites:cb("s4")});alert("Saved. Refresh the public site to see changes.");loadAll()}
+<label><input type="checkbox" id="s4" ${SET.showSites!==false?"checked":""}> Show Links section</label>
+<button class="btn" onclick="saveSettings()">Save</button></div>
+<div class="note" style="color:var(--mut);font-size:14px;margin-top:8px">Tip: upload an image to Google Drive, set it to "Anyone with the link," open it, then use a link like <code>https://drive.google.com/uc?export=view&id=FILE_ID</code> (replace FILE_ID with yours) so it displays as an image rather than opening a preview page.</div>`;
+async function saveSettings(){await db.collection("config").doc("main").set({heroTitle:v("s1"),heroText:v("s2"),aboutTitle:v("s5"),aboutText:v("s6"),logoUrl:v("s7"),heroImageUrl:v("s8"),showBooks:cb("s3"),showSites:cb("s4")});alert("Saved. Refresh the public site to see changes.");loadAll()}
 
 /* ---------- COURSES (with edit) ---------- */
 PANEL.courses=()=>{const e=COURSES.find(c=>c.id==EDIT.course);
@@ -66,30 +69,33 @@ const data={courseId:v("l1"),title:v("l2"),videoUrl:v("l3"),pdfUrl:v("l4")};
 if(EDIT.lesson){await db.collection("lessons").doc(EDIT.lesson).update(data);EDIT.lesson=null}else{await db.collection("lessons").add(data)}
 await loadAll()}
 
-/* ---------- QUESTIONS (structured MCQ/Matching, with edit) ---------- */
+/* ---------- QUESTIONS (by Lesson + Set number, structured MCQ/Matching, with edit) ---------- */
 PANEL.questions=()=>{const e=QUESTIONS.find(q=>q.id==EDIT.question);const type=e?e.type:(window.__qtype||"MCQ");
 if(e)mopts=e.type=="Matching"?(e.opts.length?e.opts.map(p=>p.split("|")):[["",""]]):mopts;
+if(!LESSONS.length)return panel("Questions",`<p>Add at least one <b>Lesson</b> first (left menu), then come back here.</p>`,"");
 return panel("Questions",`<div class="list">
+<select id="q2">${COURSES.map(c=>`<optgroup label="${esc(c.name)}">${LESSONS.filter(l=>l.courseId==c.id).map(l=>`<option value="${l.id}" ${e&&e.lessonId==l.id?"selected":""}>${esc(l.title)}</option>`).join("")}</optgroup>`).join("")}</select>
 <select id="q1" onchange="window.__qtype=this.value;renderShell('questions')">${["MCQ","Written","Matching"].map(t=>`<option ${t==type?"selected":""}>${t}</option>`).join("")}</select>
-<select id="q2">${COURSES.map(c=>`<option value="${c.id}" ${e&&e.courseId==c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+<label>Set number (groups questions into Set 1, Set 2, etc. — trainees pick a set to practise)<br><input id="q0" type="number" min="1" value="${e?(e.setNo||1):1}" style="width:100px"></label>
 <input id="q3" placeholder="Question text" value="${esc(e?e.q:"")}">
 ${qform(type,e)}
 <button class="btn" onclick="saveQuestion('${type}')">${e?"Update question":"Add question"}</button>
 ${e?`<button class="btn sm ghost" onclick="mopts=[['','']];EDIT.question=null;renderShell('questions')">Cancel edit</button>`:""}
 </div>`,
-QUESTIONS.map(q=>`<div class="item"><span>${q.type}: ${esc(q.q)} <small>${esc((COURSES.find(c=>c.id==q.courseId)||{}).name||"")}</small></span><span>${editBtn("question",q.id)} ${del("questions",q.id)}</span></div>`).join(""))}
+QUESTIONS.slice().sort((a,b)=>(a.lessonId>b.lessonId?1:-1)||(a.setNo||1)-(b.setNo||1)).map(q=>`<div class="item"><span>${q.type} · Set ${q.setNo||1}: ${esc(q.q)} <small>${esc((LESSONS.find(l=>l.id==q.lessonId)||{}).title||"(no lesson)")}</small></span><span>${editBtn("question",q.id)} ${del("questions",q.id)}</span></div>`).join(""))}
 function qform(type,e){
  if(type=="Written")return `<textarea id="qw_ans" rows="2" placeholder="Key words for the correct answer, comma separated">${esc(e?e.ans||"":"")}</textarea>`;
  if(type=="MCQ"){const opts=e?e.opts:["","","",""];while(opts.length<4)opts.push("");
   return `<div class="list">${opts.map((o,i)=>`<div style="display:flex;gap:8px;align-items:center"><input type="radio" name="qm_correct" value="${i}" ${e&&e.ans==o&&o?"checked":(i==0&&!e?"checked":"")}><input id="qm_o${i}" placeholder="Option ${i+1}${i>1?' (optional)':''}" value="${esc(o)}" style="flex:1"></div>`).join("")}</div>`}
  // Matching
  return `<div id="mrows">${mopts.map((p,i)=>`<div style="display:flex;gap:8px;margin:4px 0"><input placeholder="Left item" value="${esc(p[0])}" onchange="mopts[${i}][0]=this.value"><input placeholder="Matches with" value="${esc(p[1])}" onchange="mopts[${i}][1]=this.value"></div>`).join("")}</div><button type="button" class="btn sm ghost" onclick="mopts.push(['','']);renderShell('questions')">+ Add row</button>`}
-async function saveQuestion(type){if(!COURSES.length)return alert("Add a course first");if(!v("q3"))return alert("Enter the question");
+async function saveQuestion(type){if(!LESSONS.length)return alert("Add a lesson first");if(!v("q3"))return alert("Enter the question");
 let opts=[],ans="";
 if(type=="MCQ"){opts=[0,1,2,3].map(i=>v("qm_o"+i)).filter(Boolean);const r=document.querySelector('[name=qm_correct]:checked');ans=r?v("qm_o"+r.value):"";if(!ans)return alert("Mark which option is correct")}
 else if(type=="Written"){ans=v("qw_ans")}
 else{opts=mopts.filter(p=>p[0]&&p[1]).map(p=>p[0]+"|"+p[1]);if(!opts.length)return alert("Add at least one matching row")}
-const data={type,courseId:v("q2"),q:v("q3"),opts,ans};
+const lessonId=v("q2"),lesson=LESSONS.find(l=>l.id==lessonId),setNo=parseInt(v("q0"))||1;
+const data={type,lessonId,courseId:lesson?lesson.courseId:"",setNo,q:v("q3"),opts,ans};
 if(EDIT.question){await db.collection("questions").doc(EDIT.question).update(data);EDIT.question=null}else{await db.collection("questions").add(data)}
 mopts=[["",""]];await loadAll()}
 
@@ -113,17 +119,24 @@ async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={
 if(EDIT.book){await db.collection("books").doc(EDIT.book).update(data);EDIT.book=null}else{await db.collection("books").add(data)}
 await loadAll()}
 
-/* ---------- SITES (with edit) ---------- */
+/* ---------- LINK CATEGORIES ---------- */
+PANEL.linkcats=()=>panel("Link Categories",`<div class="list"><input id="lcat1" placeholder="Category name (e.g. Government, Practice tools)"><button class="btn" onclick="addLCat()">Add category</button></div>`,
+LCATS.map(c=>`<div class="item"><span>${esc(c.name)}</span>${del("linkcats",c.id)}</div>`).join(""))
+async function addLCat(){if(!v("lcat1"))return alert("Enter a category name");await db.collection("linkcats").add({name:v("lcat1")});await loadAll()}
+
+/* ---------- LINKS (was "sites"; category dropdown + edit) ---------- */
 PANEL.sites=()=>{const e=SITES.find(s=>s.id==EDIT.site);
-return panel("Useful Websites",`<div class="list">
+if(!LCATS.length)return panel("Links",`<p>Add at least one <b>Link Category</b> first (left menu), then come back here.</p>`,"");
+return panel("Links",`<div class="list">
+<select id="w0">${LCATS.map(c=>`<option value="${esc(c.name)}" ${e&&e.cat==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
 <input id="w1" placeholder="Title" value="${esc(e?e.title:"")}">
 <input id="w2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
 <input id="w3" placeholder="Link" value="${esc(e?e.link||"":"")}">
 <button class="btn" onclick="saveSite()">${e?"Update link":"Add link"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('site')">Cancel edit</button>`:""}
 </div>`,
-SITES.map(s=>`<div class="item"><span>${esc(s.title)}</span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
-async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={title:v("w1"),desc:v("w2"),link:v("w3")};
+SITES.map(s=>`<div class="item"><span>${esc(s.title)} <small>${esc(s.cat||"General")}</small></span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
+async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),title:v("w1"),desc:v("w2"),link:v("w3")};
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
 
