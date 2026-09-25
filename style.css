@@ -233,7 +233,7 @@ footer {
   text-align: center;
   color: var(--mut);
   padding: 30px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 @media(max-width: 760px) {
