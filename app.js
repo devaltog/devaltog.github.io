@@ -1,12 +1,12 @@
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
-let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[];
+let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[];
 async function loadAll(){
  try{const s=await db.collection("config").doc("main").get();if(s.exists)SET=Object.assign(SET,s.data())}catch(e){}
  const ord=a=>a.sort((x,y)=>(x.order||0)-(y.order||0));
  const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
  COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
- LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");
+ LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");
  document.getElementById("brandLink").textContent=SET.heroTitle||"Development Allies BD";document.title=SET.heroTitle||"Development Allies BD";
  route()}
 function cname(id){const c=COURSES.find(x=>x.id==id);return c?c.name:id}
@@ -14,7 +14,8 @@ function embed(u){if(!u)return"";if(u.includes("youtu")){const id=(u.match(/(?:v
 const H=(t,s)=>`<div><h2>${esc(t)}</h2><p class="muted">${esc(s)}</p></div>`;
 const V={};
 V.home=()=>`<section class="hero"><h1>${esc(SET.heroTitle)}</h1><p class="lead">${esc(SET.heroText)}</p><div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="#/courses">Explore courses</a><a class="btn ghost" href="#/practice">Start practice</a></div></section>
-<div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Useful Websites",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}</div>`;
+${SET.aboutText?`<div class="card" style="margin:20px 0"><h2>${esc(SET.aboutTitle||"About")}</h2><p style="white-space:pre-wrap;color:var(--mut)">${esc(SET.aboutText)}</p></div>`:""}
+<div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Useful Websites",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile" href="${esc(t.link).startsWith('#')?esc(t.link):esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}><h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>`;
 V.courses=()=>H("Courses","Pick a course to see lessons and resources.")+`<div class="grid">${COURSES.map(c=>`<a class="card tile" href="#/course/${c.id}"><h3>${esc(c.name)}</h3><p>${esc(c.desc||"")}</p></a>`).join("")||"<p class=muted>No courses yet.</p>"}</div>`;
 V.course=id=>{const c=COURSES.find(x=>x.id==id);if(!c)return V.courses();const ls=LESSONS.filter(l=>l.courseId==id);
 return H(c.name,c.desc||"")+`<div class="list">${ls.map(l=>`<div class="card"><h3>${esc(l.title)}</h3>${embed(l.videoUrl)}${l.pdfUrl?`<p><a class="btn sm ghost" href="${esc(l.pdfUrl)}" target="_blank" rel="noopener">Open PDF / file</a></p>`:""}</div>`).join("")||"<p class=muted>No lessons yet.</p>"}</div><a class="btn ghost" href="#/practice">Practise this course</a>`};
