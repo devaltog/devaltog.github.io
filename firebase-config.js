@@ -1,11 +1,11 @@
-/* Your Firebase config — already filled in for Development Allies BD. */
+/* PASTE YOUR OWN FIREBASE CONFIG BELOW. See the guide, Part 3. */
 const firebaseConfig = {
-  apiKey: "AIzaSyD1_caUdM7yl9ruELcpPke8XO0LROEiXUc",
-  authDomain: "devalliesbd.firebaseapp.com",
-  projectId: "devalliesbd",
-  storageBucket: "devalliesbd.firebasestorage.app",
-  messagingSenderId: "60035762750",
-  appId: "1:60035762750:web:3146b189521835fbaddf6f"
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  projectId: "PASTE_YOUR_PROJECT_ID",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
