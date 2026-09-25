@@ -1,3 +1,4 @@
+/* Your Firebase config for the devalliesbd project. */
 const firebaseConfig = {
   apiKey: "AIzaSyD1_caUdM7yl9ruELcpPke8XO0LROEiXUc",
   authDomain: "devalliesbd.firebaseapp.com",
