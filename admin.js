@@ -5,6 +5,8 @@ const cb=id=>!!(document.getElementById(id)||{}).checked;
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],SET={};
 let EDIT={course:null,lesson:null,question:null,book:null,site:null};
 let mopts=[["",""],["",""],["",""]]; // matching rows while building a question
+const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
+const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
 auth.onAuthStateChanged(u=>{if(u){who.textContent=u.email;loadAll()}else{who.textContent="";renderLogin()}});
 function renderLogin(){app.innerHTML=`<div class="card narrow"><h2>Trainer login</h2><p class="muted">Sign in with the account created in Firebase (see setup guide).</p>
 <div class="list"><input id="em" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn" onclick="doLogin()">Log in</button><p id="err" style="color:#ff9a9a"></p></div></div>`}
@@ -41,31 +43,51 @@ async function saveSettings(){await db.collection("config").doc("main").set({her
 
 /* ---------- COURSES (with edit) ---------- */
 PANEL.courses=()=>{const e=COURSES.find(c=>c.id==EDIT.course);
+const sorted=COURSES.slice().sort((a,b)=>natSort(a.order,b.order));
 return panel("Courses",`<div class="list">
 <input id="c1" placeholder="Course name" value="${esc(e?e.name:"")}">
 <input id="c2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
+<input id="c3" placeholder="Order (e.g. 1, 2, A, B — controls the sequence shown)" value="${esc(e?e.order||"":"")}">
 <button class="btn" onclick="saveCourse()">${e?"Update course":"Add course"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('course')">Cancel edit</button>`:""}
 </div>`,
-COURSES.map(c=>`<div class="item"><span>${esc(c.name)} <small>${esc(c.desc||"")}</small></span><span>${editBtn("course",c.id)} ${del("courses",c.id)}</span></div>`).join(""))}
+sorted.map(c=>`<div class="item"><span>${esc(c.order?"["+c.order+"] ":"")}${esc(c.name)} <small>${esc(c.desc||"")}</small></span><span>${editBtn("course",c.id)} ${del("courses",c.id)}</span></div>`).join(""))}
 function startEdit(kind,id){EDIT[kind]=id;renderShell(window.__sec)}
-async function saveCourse(){if(!v("c1"))return alert("Enter a course name");const data={name:v("c1"),desc:v("c2")};
+async function saveCourse(){if(!v("c1"))return alert("Enter a course name");const data={name:v("c1"),desc:v("c2"),order:v("c3")};
 if(EDIT.course){await db.collection("courses").doc(EDIT.course).update(data);EDIT.course=null}else{await db.collection("courses").add(Object.assign({hidden:false},data))}
 await loadAll()}
 
 /* ---------- LESSONS (with edit) ---------- */
 PANEL.lessons=()=>{const e=LESSONS.find(l=>l.id==EDIT.lesson);
+const sorted=LESSONS.slice().sort((a,b)=>natSort(a.order,b.order));
 return panel("Lessons",`<div class="list">
 <select id="l1">${COURSES.map(c=>`<option value="${c.id}" ${e&&e.courseId==c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
 <input id="l2" placeholder="Lesson title" value="${esc(e?e.title:"")}">
 <input id="l3" placeholder="Video link (YouTube, optional)" value="${esc(e?e.videoUrl||"":"")}">
 <input id="l4" placeholder="PDF / Google Drive link (optional)" value="${esc(e?e.pdfUrl||"":"")}">
+<input id="l5" placeholder="Order (e.g. 1, 2, A, B — controls the sequence shown)" value="${esc(e?e.order||"":"")}">
 <button class="btn" onclick="saveLesson()">${e?"Update lesson":"Add lesson"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('lesson')">Cancel edit</button>`:""}
 </div>`,
-LESSONS.map(l=>`<div class="item"><span>${esc(l.title)} <small>${esc((COURSES.find(c=>c.id==l.courseId)||{}).name||"")}</small></span><span>${editBtn("lesson",l.id)} ${del("lessons",l.id)}</span></div>`).join(""))}
+sorted.map(l=>`<div class="item"><span>${esc(l.order?"["+l.order+"] ":"")}${esc(l.title)} <small>${esc((COURSES.find(c=>c.id==l.courseId)||{}).name||"")}</small></span><span>${editBtn("lesson",l.id)} ${del("lessons",l.id)}</span></div>`).join(""))+materialsPanel()}
+function materialsPanel(){if(!LESSONS.length)return"";
+const lid=LESSONS.find(l=>l.id==window.__matLesson)?window.__matLesson:LESSONS[0].id;
+const lesson=LESSONS.find(l=>l.id==lid),mats=(lesson&&lesson.materials)||[];
+return `<h3 class="grp">Extra materials for a lesson</h3><div class="card list">
+<select onchange="window.__matLesson=this.value;renderShell('lessons')">${LESSONS.map(l=>`<option value="${l.id}" ${l.id==lid?"selected":""}>${esc(l.title)}</option>`).join("")}</select>
+<div class="list">${mats.map((m,i)=>`<div class="item"><span>${esc(m.type)}: ${esc(m.title)}</span><span><a class="btn sm ghost" href="${esc(m.link)}" target="_blank" rel="noopener">Open</a> <button class="btn sm ghost" onclick="rmMaterial('${lid}',${i})">Delete</button></span></div>`).join("")||"<p class=muted>No extra materials yet.</p>"}</div>
+<select id="mt1">${["PDF","Video","Slide","Worksheet","Link","Other"].map(t=>`<option>${t}</option>`).join("")}</select>
+<input id="mt2" placeholder="Title (e.g. Practice worksheet)">
+<input id="mt3" placeholder="Link (Google Drive, YouTube, etc.)">
+<button class="btn" onclick="addMaterial('${lid}')">Add material</button>
+</div>`}
+async function addMaterial(lid){if(!v("mt2")||!v("mt3"))return alert("Enter a title and a link");
+const lesson=LESSONS.find(l=>l.id==lid),mats=(lesson.materials||[]).concat([{type:v("mt1"),title:v("mt2"),link:v("mt3")}]);
+await db.collection("lessons").doc(lid).update({materials:mats});await loadAll()}
+async function rmMaterial(lid,i){const lesson=LESSONS.find(l=>l.id==lid),mats=(lesson.materials||[]).slice();mats.splice(i,1);
+await db.collection("lessons").doc(lid).update({materials:mats});await loadAll()}
 async function saveLesson(){if(!COURSES.length)return alert("Add a course first");if(!v("l2"))return alert("Enter a lesson title");
-const data={courseId:v("l1"),title:v("l2"),videoUrl:v("l3"),pdfUrl:v("l4")};
+const data={courseId:v("l1"),title:v("l2"),videoUrl:v("l3"),pdfUrl:v("l4"),order:v("l5")};
 if(EDIT.lesson){await db.collection("lessons").doc(EDIT.lesson).update(data);EDIT.lesson=null}else{await db.collection("lessons").add(data)}
 await loadAll()}
 
@@ -107,15 +129,17 @@ async function addCat(){if(!v("cat1"))return alert("Enter a category name");awai
 /* ---------- BOOKS (category dropdown + edit) ---------- */
 PANEL.books=()=>{const e=BOOKS.find(b=>b.id==EDIT.book);
 if(!CATS.length)return panel("Books",`<p>Add at least one <b>Book Category</b> first (left menu), then come back here.</p>`,"");
+const sorted=BOOKS.slice().sort((a,b)=>natSort(a.order,b.order));
 return panel("Books",`<div class="list">
 <select id="b1">${CATS.map(c=>`<option value="${esc(c.name)}" ${e&&e.cat==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
 <input id="b2" placeholder="Book title" value="${esc(e?e.title:"")}">
 <input id="b3" placeholder="Google Drive link" value="${esc(e?e.link||"":"")}">
+<input id="b4" placeholder="Order within category (e.g. 1, 2, A, B)" value="${esc(e?e.order||"":"")}">
 <button class="btn" onclick="saveBook()">${e?"Update book":"Add book"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('book')">Cancel edit</button>`:""}
 </div>`,
-BOOKS.map(b=>`<div class="item"><span>${esc(b.title)} <small>${esc(b.cat)}</small></span><span>${editBtn("book",b.id)} ${del("books",b.id)}</span></div>`).join(""))}
-async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),title:v("b2"),link:v("b3")};
+sorted.map(b=>`<div class="item"><span>${esc(b.order?"["+b.order+"] ":"")}${esc(b.title)} <small>${esc(b.cat)}</small></span><span>${editBtn("book",b.id)} ${del("books",b.id)}</span></div>`).join(""))}
+async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),title:v("b2"),link:v("b3"),order:v("b4")};
 if(EDIT.book){await db.collection("books").doc(EDIT.book).update(data);EDIT.book=null}else{await db.collection("books").add(data)}
 await loadAll()}
 
@@ -127,16 +151,18 @@ async function addLCat(){if(!v("lcat1"))return alert("Enter a category name");aw
 /* ---------- LINKS (was "sites"; category dropdown + edit) ---------- */
 PANEL.sites=()=>{const e=SITES.find(s=>s.id==EDIT.site);
 if(!LCATS.length)return panel("Links",`<p>Add at least one <b>Link Category</b> first (left menu), then come back here.</p>`,"");
+const sorted=SITES.slice().sort((a,b)=>natSort(a.order,b.order));
 return panel("Links",`<div class="list">
 <select id="w0">${LCATS.map(c=>`<option value="${esc(c.name)}" ${e&&e.cat==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
 <input id="w1" placeholder="Title" value="${esc(e?e.title:"")}">
 <input id="w2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
 <input id="w3" placeholder="Link" value="${esc(e?e.link||"":"")}">
+<input id="w4" placeholder="Order within category (e.g. 1, 2, A, B)" value="${esc(e?e.order||"":"")}">
 <button class="btn" onclick="saveSite()">${e?"Update link":"Add link"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('site')">Cancel edit</button>`:""}
 </div>`,
-SITES.map(s=>`<div class="item"><span>${esc(s.title)} <small>${esc(s.cat||"General")}</small></span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
-async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),title:v("w1"),desc:v("w2"),link:v("w3")};
+sorted.map(s=>`<div class="item"><span>${esc(s.order?"["+s.order+"] ":"")}${esc(s.title)} <small>${esc(s.cat||"General")}</small></span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
+async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),title:v("w1"),desc:v("w2"),link:v("w3"),order:v("w4")};
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
 
