@@ -24,7 +24,8 @@ t=t.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
 t=t.replace(/\*(.+?)\*/g,"<i>$1</i>");
 t=t.replace(/(^|[^\w])_(.+?)_(?=[^\w]|$)/g,"$1<i>$2</i>");
 t=t.replace(/tel:(\+?[\d\-\s]{6,15})/gi,(m,num)=>`<a href="tel:${num.trim()}">${num.trim()}</a>`);
-t=t.replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+t=t.replace(/(?<!\]\()(https?:\/\/[^\s<)\]]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+t=t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
 t=t.replace(/([\w.+-]+@[\w-]+\.[\w.-]+)(?![^<]*>)/g,'<a href="mailto:$1">$1</a>');
 return t}
 function md(raw){if(!raw)return"";return raw.split(/\n{2,}/).map(block=>{
