@@ -2,9 +2,11 @@ const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&
 let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[];
 const shuffle=a=>a.map(x=>[Math.random(),x]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
+const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
 async function loadAll(){
  try{const s=await db.collection("config").doc("main").get();if(s.exists)SET=Object.assign(SET,s.data())}catch(e){}
- const ord=a=>a.sort((x,y)=>(x.order||0)-(y.order||0));
+ const ord=a=>a.sort((x,y)=>natSort(x.order,y.order));
  const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
  COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
  LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");
@@ -15,13 +17,19 @@ function cname(id){const c=COURSES.find(x=>x.id==id);return c?c.name:id}
 function lname(id){const l=LESSONS.find(x=>x.id==id);return l?l.title:id}
 function embed(u){if(!u)return"";if(u.includes("youtu")){const id=(u.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{6,})/)||[])[1];if(id)return `<div style="aspect-ratio:16/9"><iframe width="100%" height="100%" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe></div>`}return `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">Watch video</a>`}
 const H=(t,s)=>`<div><h2>${esc(t)}</h2><p class="muted">${esc(s)}</p></div>`;
+function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")}
+function md(raw){if(!raw)return"";return raw.split(/\n{2,}/).map(block=>{
+ const lines=block.split("\n").filter(l=>l.trim()!=="");if(!lines.length)return"";
+ if(lines.every(l=>/^-\s+/.test(l.trim())))return `<ul>${lines.map(l=>`<li>${inline(l.trim().replace(/^-\s+/,""))}</li>`).join("")}</ul>`;
+ if(lines.length==1&&/^##\s+/.test(lines[0].trim()))return `<h3 style="margin:16px 0 4px">${inline(lines[0].trim().replace(/^##\s+/,""))}</h3>`;
+ return `<p>${lines.map(inline).join("<br>")}</p>`}).join("")}
 const V={};
 V.home=()=>`<section class="hero"><h1>${esc(SET.heroTitle)}</h1><p class="lead">${esc(SET.heroText)}</p><div style="display:flex;gap:10px;flex-wrap:wrap">${SET.heroImageUrl?`<div style="width:100%;margin:16px 0"><img src="${esc(SET.heroImageUrl)}" style="max-width:100%;border-radius:16px;display:block"></div>`:""}<a class="btn" href="#/courses">Explore courses</a><a class="btn ghost" href="#/practice">Start practice</a></div></section>
-${SET.aboutText?`<div class="card" style="margin:20px 0"><h2>${esc(SET.aboutTitle||"About")}</h2><p style="white-space:pre-wrap;color:var(--mut)">${esc(SET.aboutText)}</p></div>`:""}
+${SET.aboutText?`<div class="card" style="margin:20px 0"><h2>${esc(SET.aboutTitle||"About")}</h2><div style="color:var(--mut)">${md(SET.aboutText)}</div></div>`:""}
 <div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Links",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile" href="${esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}><h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>`;
 V.courses=()=>H("Courses","Pick a course to see lessons and resources.")+`<div class="grid">${COURSES.map(c=>`<a class="card tile" href="#/course/${c.id}"><h3>${esc(c.name)}</h3><p>${esc(c.desc||"")}</p></a>`).join("")||"<p class=muted>No courses yet.</p>"}</div>`;
 V.course=id=>{const c=COURSES.find(x=>x.id==id);if(!c)return V.courses();const ls=LESSONS.filter(l=>l.courseId==id);
-return H(c.name,c.desc||"")+`<div class="list">${ls.map(l=>`<div class="card"><h3>${esc(l.title)}</h3>${embed(l.videoUrl)}${l.pdfUrl?`<p><a class="btn sm ghost" href="${esc(l.pdfUrl)}" target="_blank" rel="noopener">Open PDF / file</a></p>`:""}<p><a class="btn sm" href="#/practice/lesson/${l.id}">Practise this lesson</a></p></div>`).join("")||"<p class=muted>No lessons yet.</p>"}</div>`};
+return H(c.name,c.desc||"")+`<div class="list">${ls.map(l=>`<div class="card"><h3>${esc(l.title)}</h3>${embed(l.videoUrl)}${l.pdfUrl?`<p><a class="btn sm ghost" href="${esc(l.pdfUrl)}" target="_blank" rel="noopener">Open PDF / file</a></p>`:""}${(l.materials||[]).length?`<div class="list" style="margin-top:8px">${l.materials.map(m=>`<div class="item"><span>${esc(m.type)}: ${esc(m.title)}</span><a class="btn sm ghost" href="${esc(m.link)}" target="_blank" rel="noopener">Open</a></div>`).join("")}</div>`:""}<p><a class="btn sm" href="#/practice/lesson/${l.id}">Practise this lesson</a></p></div>`).join("")||"<p class=muted>No lessons yet.</p>"}</div>`};
 
 /* ---------------- PRACTICE: course -> lesson -> type -> set -> quiz ---------------- */
 const TY={MCQ:"Choose the correct answer.",Written:"Type a short answer.",Matching:"Match each item."};
@@ -57,7 +65,13 @@ function renderQuiz(){if(!QUIZ)return;
  const q=QUIZ.qs[QUIZ.idx];
  app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card"><h3>${esc(q.q)}</h3>${qInput(q)}</div><button class="btn" onclick="quizNext()">${QUIZ.idx+1==QUIZ.qs.length?"Finish set":"Next question"}</button>`}
 
-V.books=()=>{const cats=[...new Set(BOOKS.map(b=>b.cat))];return H("Books","Browse by category.")+cats.map(c=>`<h3 class="grp">${esc(c)}</h3><div class="grid">${BOOKS.filter(b=>b.cat==c).map(b=>`<div class="card"><h3>${esc(b.title)}</h3><a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`).join("")}</div>`).join("")||"<p class=muted>No books yet.</p>"};
+const BOOK_PREVIEW=8;
+const bookCard=b=>`<div class="card"><h3>${esc(b.title)}</h3><a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`;
+V.books=(sub,cat)=>{if(sub=="cat"&&cat){const list=BOOKS.filter(b=>b.cat==cat).sort((a,b)=>natSort(a.order,b.order));
+ return H(cat,`All ${list.length} books in this category.`)+`<div class="grid">${list.map(bookCard).join("")||"<p class=muted>No books here yet.</p>"}</div><p><a class="btn ghost" href="#/books">← Back to Books</a></p>`}
+const cats=[...new Set(BOOKS.map(b=>b.cat))];
+return H("Books","Browse by category.")+(cats.map(c=>{const list=BOOKS.filter(b=>b.cat==c).sort((a,b)=>natSort(a.order,b.order)),preview=list.slice(0,BOOK_PREVIEW);
+ return `<h3 class="grp">${esc(c)}</h3><div class="grid">${preview.map(bookCard).join("")}</div>${list.length>BOOK_PREVIEW?`<p><a class="btn sm ghost" href="#/books/cat/${encodeURIComponent(c)}">View all ${list.length} in ${esc(c)} →</a></p>`:""}`}).join("")||"<p class=muted>No books yet.</p>")};
 V.sites=()=>{const cats=[...new Set(SITES.map(s=>s.cat||"General"))];return H("Links","Helpful links, by category.")+cats.map(c=>`<h3 class="grp">${esc(c)}</h3><div class="grid">${SITES.filter(s=>(s.cat||"General")==c).map(s=>`<div class="card"><h3>${esc(s.title)}</h3><p>${esc(s.desc||"")}</p><a class="btn sm" href="${esc(s.link)}" target="_blank" rel="noopener">Visit</a></div>`).join("")}</div>`).join("")||"<p class=muted>No links yet.</p>"};
 function go(h){location.hash=h}
 function route(){const parts=location.hash.slice(2).split("/").map(decodeURIComponent),p=parts[0]||"home";
