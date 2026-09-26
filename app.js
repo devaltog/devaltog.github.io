@@ -17,10 +17,20 @@ function cname(id){const c=COURSES.find(x=>x.id==id);return c?c.name:id}
 function lname(id){const l=LESSONS.find(x=>x.id==id);return l?l.title:id}
 function embed(u){if(!u)return"";if(u.includes("youtu")){const id=(u.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{6,})/)||[])[1];if(id)return `<div style="aspect-ratio:16/9"><iframe width="100%" height="100%" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe></div>`}return `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">Watch video</a>`}
 const H=(t,s)=>`<div><h2>${esc(t)}</h2><p class="muted">${esc(s)}</p></div>`;
-function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")}
+function inline(s){let t=esc(s);
+t=t.replace(/~~(.+?)~~/g,"<s>$1</s>");
+t=t.replace(/__(.+?)__/g,"<u>$1</u>");
+t=t.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+t=t.replace(/\*(.+?)\*/g,"<i>$1</i>");
+t=t.replace(/(^|[^\w])_(.+?)_(?=[^\w]|$)/g,"$1<i>$2</i>");
+t=t.replace(/tel:(\+?[\d\-\s]{6,15})/gi,(m,num)=>`<a href="tel:${num.trim()}">${num.trim()}</a>`);
+t=t.replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+t=t.replace(/([\w.+-]+@[\w-]+\.[\w.-]+)(?![^<]*>)/g,'<a href="mailto:$1">$1</a>');
+return t}
 function md(raw){if(!raw)return"";return raw.split(/\n{2,}/).map(block=>{
  const lines=block.split("\n").filter(l=>l.trim()!=="");if(!lines.length)return"";
  if(lines.every(l=>/^-\s+/.test(l.trim())))return `<ul>${lines.map(l=>`<li>${inline(l.trim().replace(/^-\s+/,""))}</li>`).join("")}</ul>`;
+ if(lines.every(l=>/^\d+\.\s+/.test(l.trim())))return `<ol>${lines.map(l=>`<li>${inline(l.trim().replace(/^\d+\.\s+/,""))}</li>`).join("")}</ol>`;
  if(lines.length==1&&/^##\s+/.test(lines[0].trim()))return `<h3 style="margin:16px 0 4px">${inline(lines[0].trim().replace(/^##\s+/,""))}</h3>`;
  return `<p>${lines.map(inline).join("<br>")}</p>`}).join("")}
 const V={};
