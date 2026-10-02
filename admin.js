@@ -1,4 +1,4 @@
-/* Fuad Hasasn's dashboard (admin.js) v7.1 */
+/* Trainer dashboard (admin.js) v7.2 (7.1 fixes + categories, subcategories, tags, ordering) */
 const app=document.getElementById("app"),who=document.getElementById("who");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const v=id=>(document.getElementById(id)||{value:""}).value.trim();
@@ -6,7 +6,7 @@ const cb=id=>!!(document.getElementById(id)||{}).checked;
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],FLINKS=[],SET={};
 const FTYPES=["Mobile","WhatsApp","Email","LinkedIn","Facebook","Website","Custom"];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
-let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null};
+let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null,catbook:null,catlink:null};
 let mopts=[["",""],["",""],["",""]]; // matching rows while building a question
 const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
 const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
@@ -186,50 +186,132 @@ const data={type,lessonId,courseId:lesson?lesson.courseId:"",setNo,q:v("q3"),opt
 if(EDIT.question){await db.collection("questions").doc(EDIT.question).update(data);EDIT.question=null}else{await db.collection("questions").add(data)}
 window.__qSet=setNo;mopts=[["",""]];await loadAll()}
 
-/* ---------- CATEGORIES ---------- */
-PANEL.categories=()=>panel("Book Categories",`<div class="list"><input id="cat1" placeholder="Category name (e.g. Fiction, CBTA Manuals)"><button class="btn" onclick="addCat()">Add category</button></div>`,
-CATS.map(c=>`<div class="item"><span>${esc(c.name)}</span>${del("categories",c.id)}</div>`).join(""))
-async function addCat(){if(!v("cat1"))return alert("Enter a category name");await db.collection("categories").add({name:v("cat1")});await loadAll()}
+/* =====================================================================
+   CATEGORIES / SUBCATEGORIES / TAGS / ORDERING  (Books + Links share the same code)
+   Items point to their category by NAME (item.cat) and subcategory by name (item.sub).
+   So renaming/deleting a category or subcategory also updates every item that uses it.
+   ===================================================================== */
+const CK={
+ book:{col:"categories",icol:"books",title:"Book Categories",noun:"book",items:()=>BOOKS,cats:()=>CATS,editKey:"catbook",ph:"Category name (e.g. Fiction, CBTA Manuals)"},
+ link:{col:"linkcats",icol:"sites",title:"Link Categories",noun:"link",items:()=>SITES,cats:()=>LCATS,editKey:"catlink",ph:"Category name (e.g. Government, Practice tools)"}};
+const catSort=(a,b)=>{const f=x=>(x.order===undefined||x.order===null||x.order==="")?1e9:Number(x.order);return (f(a)-f(b))||String(a.name).localeCompare(String(b.name))};
+const sortedCats=k=>CK[k].cats().slice().sort(catSort);
+async function batchUpdate(col,pairs){for(let i=0;i<pairs.length;i+=400){const b=db.batch();pairs.slice(i,i+400).forEach(p=>b.update(db.collection(col).doc(p[0]),p[1]));await b.commit()}}
+function parseTags(s){const out=[];String(s||"").split(/[,\s;]+/).forEach(t=>{t=t.replace(/^#+/,"").toLowerCase().replace(/[^\p{L}\p{N}_-]/gu,"");if(t&&!out.includes(t))out.push(t)});return out.slice(0,12)}
+const tagsTxt=x=>(x&&Array.isArray(x.tags)?x.tags:[]).map(t=>"#"+t).join(", ");
+function addTagTo(id,t){const el=document.getElementById(id);if(!el)return;const cur=parseTags(el.value);if(!cur.includes(t))cur.push(t);el.value=cur.map(x=>"#"+x).join(", ")}
+function tagHints(k,inputId){const all={};CK[k].items().forEach(x=>(x.tags||[]).forEach(t=>all[t]=(all[t]||0)+1));
+ const ks=Object.keys(all).sort((a,b)=>all[b]-all[a]||a.localeCompare(b)).slice(0,30);
+ return ks.length?`<div class="muted" style="font-size:13px">Existing tags (click to add): ${ks.map(t=>`<a class="tagchip" href="javascript:addTagTo('${inputId}','${esc(t)}')">#${esc(t)}</a>`).join(" ")}</div>`:""}
+function subOptions(k,catName,cur){const c=CK[k].cats().find(x=>x.name==catName),subs=(c&&c.subs)||[];
+ return `<option value="">— No subcategory —</option>`+subs.map(x=>`<option value="${esc(x)}" ${x==cur?"selected":""}>${esc(x)}</option>`).join("")}
+function adminItems(k){const cats=sortedCats(k);
+ const ci=n=>{const i=cats.findIndex(c=>c.name==n);return i<0?999:i};
+ const si=x=>{if(!x.sub)return -1;const c=cats.find(c=>c.name==x.cat),i=c?(c.subs||[]).indexOf(x.sub):-1;return i<0?998:i};
+ return CK[k].items().slice().sort((a,b)=>ci(a.cat)-ci(b.cat)||si(a)-si(b)||natSort(a.order,b.order))}
+const itemMeta=x=>`<small>${esc(x.cat||"General")}${x.sub?" › "+esc(x.sub):""}</small>${(x.tags&&x.tags.length)?` <small style="color:var(--brand)">${x.tags.map(t=>"#"+esc(t)).join(" ")}</small>`:""}`;
 
-/* ---------- BOOKS (category dropdown + edit) ---------- */
+/* ----- category manager (add / edit / reorder / delete + subcategories) ----- */
+function catPanel(k){const C=CK[k],e=C.cats().find(c=>c.id==EDIT[C.editKey]),cats=sortedCats(k),items=C.items();
+ const form=`<div class="list">
+<input id="cat_name" placeholder="${esc(C.ph)}" value="${esc(e?e.name:"")}">
+<button class="btn" onclick="catSave('${k}')">${e?"Update category":"Add category"}</button>
+${e?`<button class="btn sm ghost" onclick="cancelEdit('${C.editKey}')">Cancel edit</button><p class="muted" style="font-size:13px;margin:0">Renaming is safe: the ${items.filter(x=>x.cat==e.name).length} ${C.noun}(s) in this category are moved to the new name automatically.</p>`:`<p class="muted" style="font-size:13px;margin:0">Use ▲ ▼ to choose the order visitors see. Add subcategories under each category below.</p>`}
+</div>`;
+ const list=cats.map((c,i)=>{const subs=c.subs||[],inCat=items.filter(x=>x.cat==c.name);
+  return `<div class="card list" style="padding:12px">
+<div class="item"><span><b>${i+1}. ${esc(c.name)}</b> <small>${inCat.length} ${C.noun}(s)</small></span><span>
+<button class="btn sm ghost" title="Move up" onclick="catMove('${k}','${c.id}',-1)" ${i==0?"disabled":""}>▲</button>
+<button class="btn sm ghost" title="Move down" onclick="catMove('${k}','${c.id}',1)" ${i==cats.length-1?"disabled":""}>▼</button>
+${editBtn(C.editKey,c.id)}
+<button class="btn sm ghost" onclick="catDel('${k}','${c.id}')">Delete</button></span></div>
+${subs.map((sn,j)=>`<div class="item" style="margin-left:22px"><span>↳ ${esc(sn)} <small>${inCat.filter(x=>x.sub==sn).length} ${C.noun}(s)</small></span><span>
+<button class="btn sm ghost" onclick="subMove('${k}','${c.id}',${j},-1)" ${j==0?"disabled":""}>▲</button>
+<button class="btn sm ghost" onclick="subMove('${k}','${c.id}',${j},1)" ${j==subs.length-1?"disabled":""}>▼</button>
+<button class="btn sm ghost" onclick="subRename('${k}','${c.id}',${j})">Rename</button>
+<button class="btn sm ghost" onclick="subDel('${k}','${c.id}',${j})">Delete</button></span></div>`).join("")}
+<div style="margin-left:22px;display:flex;gap:8px;flex-wrap:wrap"><input id="sub_${c.id}" placeholder="New subcategory in ${esc(c.name)}"><button class="btn sm ghost" onclick="subAdd('${k}','${c.id}')">+ Add subcategory</button></div>
+</div>`}).join("");
+ return panel(C.title,form,list)}
+async function catSave(k){const C=CK[k],name=v("cat_name");if(!name)return alert("Enter a category name");
+ const e=C.cats().find(c=>c.id==EDIT[C.editKey]);
+ if(C.cats().some(c=>(!e||c.id!=e.id)&&String(c.name).toLowerCase()==name.toLowerCase()))return alert("A category with this name already exists");
+ if(e){if(e.name!=name){const aff=C.items().filter(x=>x.cat==e.name);
+   if(!confirm(`Rename "${e.name}" to "${name}"?\n\n${aff.length} ${C.noun}(s) in this category will be moved to the new name automatically.`))return;
+   await db.collection(C.col).doc(e.id).update({name});
+   await batchUpdate(C.icol,aff.map(x=>[x.id,{cat:name}]))}
+  EDIT[C.editKey]=null}
+ else{const mx=Math.max(C.cats().length,...C.cats().map(c=>Number(c.order)||0));await db.collection(C.col).add({name,subs:[],order:mx+1})}
+ await loadAll()}
+async function catMove(k,id,dir){const cats=sortedCats(k),i=cats.findIndex(c=>c.id==id),j=i+dir;if(i<0||j<0||j>=cats.length)return;
+ [cats[i],cats[j]]=[cats[j],cats[i]];
+ await batchUpdate(CK[k].col,cats.map((c,n)=>[c.id,{order:n+1}]).filter((p,n)=>cats[n].order!=n+1));await loadAll()}
+async function catDel(k,id){const C=CK[k],c=C.cats().find(x=>x.id==id);if(!c)return;const aff=C.items().filter(x=>x.cat==c.name);
+ if(!confirm(aff.length?`Delete category "${c.name}"?\n\n${aff.length} ${C.noun}(s) in it will NOT be deleted. They will move to "General" (no category) until you give them a new category.`:`Delete category "${c.name}"?`))return;
+ if(aff.length)await batchUpdate(C.icol,aff.map(x=>[x.id,{cat:"",sub:""}]));
+ await db.collection(C.col).doc(id).delete();
+ const rest=sortedCats(k).filter(x=>x.id!=id);await batchUpdate(C.col,rest.map((x,n)=>[x.id,{order:n+1}]).filter((p,n)=>rest[n].order!=n+1));
+ await loadAll()}
+const subsOf=(k,id)=>{const c=CK[k].cats().find(x=>x.id==id);return c?(c.subs||[]).slice():[]};
+async function subAdd(k,id){const name=v("sub_"+id);if(!name)return alert("Enter a subcategory name");const subs=subsOf(k,id);
+ if(subs.some(x=>x.toLowerCase()==name.toLowerCase()))return alert("That subcategory already exists in this category");
+ subs.push(name);await db.collection(CK[k].col).doc(id).update({subs});await loadAll()}
+async function subMove(k,id,j,dir){const subs=subsOf(k,id),t=j+dir;if(t<0||t>=subs.length)return;[subs[j],subs[t]]=[subs[t],subs[j]];
+ await db.collection(CK[k].col).doc(id).update({subs});await loadAll()}
+async function subRename(k,id,j){const C=CK[k],c=C.cats().find(x=>x.id==id),subs=subsOf(k,id),old=subs[j];
+ const nn=(prompt("Rename subcategory:",old)||"").trim();if(!nn||nn==old)return;
+ if(subs.some((x,i)=>i!=j&&x.toLowerCase()==nn.toLowerCase()))return alert("That subcategory already exists in this category");
+ subs[j]=nn;await db.collection(C.col).doc(id).update({subs});
+ await batchUpdate(C.icol,C.items().filter(x=>x.cat==c.name&&x.sub==old).map(x=>[x.id,{sub:nn}]));await loadAll()}
+async function subDel(k,id,j){const C=CK[k],c=C.cats().find(x=>x.id==id),subs=subsOf(k,id),old=subs[j];
+ const aff=C.items().filter(x=>x.cat==c.name&&x.sub==old);
+ if(!confirm(aff.length?`Delete subcategory "${old}"?\n\n${aff.length} ${C.noun}(s) will stay in "${c.name}" with no subcategory.`:`Delete subcategory "${old}"?`))return;
+ subs.splice(j,1);await db.collection(C.col).doc(id).update({subs});
+ await batchUpdate(C.icol,aff.map(x=>[x.id,{sub:""}]));await loadAll()}
+
+PANEL.categories=()=>catPanel("book");
+PANEL.linkcats=()=>catPanel("link");
+
+/* ---------- BOOKS (category + subcategory + #tags, edit) ---------- */
 PANEL.books=()=>{const e=BOOKS.find(b=>b.id==EDIT.book);
 if(!CATS.length)return panel("Books",`<p>Add at least one <b>Book Category</b> first (left menu), then come back here.</p>`,"");
-const sorted=BOOKS.slice().sort((a,b)=>natSort(a.order,b.order));
+const cats=sortedCats("book"),cur=e?(e.cat||""):cats[0].name;
 return panel("Books",`<div class="list">
-<select id="b1">${CATS.map(c=>`<option value="${esc(c.name)}" ${e&&e.cat==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+<select id="b1" onchange="document.getElementById('b1s').innerHTML=subOptions('book',this.value,'')">${cats.map(c=>`<option value="${esc(c.name)}" ${cur==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}<option value="" ${cur===""?"selected":""}>— No category (General) —</option></select>
+<select id="b1s">${subOptions("book",cur,e?e.sub||"":"")}</select>
 <input id="b2" placeholder="Book title" value="${esc(e?e.title:"")}">
 <input id="b3" placeholder="Google Drive link" value="${esc(e?e.link||"":"")}">
+<input id="b5" placeholder="Optional #tags (e.g. #cbta, #exam, #2024) — helps visitors find similar books" value="${esc(tagsTxt(e))}">
+${tagHints("book","b5")}
 <input id="b4" placeholder="Order within category (e.g. 1, 2, A, B)" value="${esc(e?e.order||"":"")}">
 ${colorPicker("bc",e)}
 <button class="btn" onclick="saveBook()">${e?"Update book":"Add book"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('book')">Cancel edit</button>`:""}
 </div>`,
-sorted.map(b=>`<div class="item"><span>${esc(b.order?"["+b.order+"] ":"")}${esc(b.title)} <small>${esc(b.cat)}</small></span><span>${editBtn("book",b.id)} ${del("books",b.id)}</span></div>`).join(""))}
-async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),title:v("b2"),link:v("b3"),order:v("b4"),color:cb("bc4")?v("bc5"):""};
+adminItems("book").map(b=>`<div class="item"><span>${esc(b.order?"["+b.order+"] ":"")}${esc(b.title)} ${itemMeta(b)}</span><span>${editBtn("book",b.id)} ${del("books",b.id)}</span></div>`).join(""))}
+async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),sub:v("b1s"),title:v("b2"),link:v("b3"),order:v("b4"),tags:parseTags(v("b5")),color:cb("bc4")?v("bc5"):""};
 if(EDIT.book){await db.collection("books").doc(EDIT.book).update(data);EDIT.book=null}else{await db.collection("books").add(data)}
 await loadAll()}
 
-/* ---------- LINK CATEGORIES ---------- */
-PANEL.linkcats=()=>panel("Link Categories",`<div class="list"><input id="lcat1" placeholder="Category name (e.g. Government, Practice tools)"><button class="btn" onclick="addLCat()">Add category</button></div>`,
-LCATS.map(c=>`<div class="item"><span>${esc(c.name)}</span>${del("linkcats",c.id)}</div>`).join(""))
-async function addLCat(){if(!v("lcat1"))return alert("Enter a category name");await db.collection("linkcats").add({name:v("lcat1")});await loadAll()}
-
-/* ---------- LINKS (was "sites"; category dropdown + edit) ---------- */
+/* ---------- LINKS (category + subcategory + #tags, edit) ---------- */
 PANEL.sites=()=>{const e=SITES.find(s=>s.id==EDIT.site);
 if(!LCATS.length)return panel("Links",`<p>Add at least one <b>Link Category</b> first (left menu), then come back here.</p>`,"");
-const sorted=SITES.slice().sort((a,b)=>natSort(a.order,b.order));
+const cats=sortedCats("link"),cur=e?(e.cat||""):cats[0].name;
 return panel("Links",`<div class="list">
-<select id="w0">${LCATS.map(c=>`<option value="${esc(c.name)}" ${e&&e.cat==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+<select id="w0" onchange="document.getElementById('w0s').innerHTML=subOptions('link',this.value,'')">${cats.map(c=>`<option value="${esc(c.name)}" ${cur==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}<option value="" ${cur===""?"selected":""}>— No category (General) —</option></select>
+<select id="w0s">${subOptions("link",cur,e?e.sub||"":"")}</select>
 <input id="w1" placeholder="Title" value="${esc(e?e.title:"")}">
 <input id="w2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
 <input id="w3" placeholder="Link" value="${esc(e?e.link||"":"")}">
+<input id="w5" placeholder="Optional #tags (e.g. #government, #forms) — helps visitors find similar links" value="${esc(tagsTxt(e))}">
+${tagHints("link","w5")}
 <input id="w4" placeholder="Order within category (e.g. 1, 2, A, B)" value="${esc(e?e.order||"":"")}">
 ${colorPicker("wc",e)}
 <button class="btn" onclick="saveSite()">${e?"Update link":"Add link"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('site')">Cancel edit</button>`:""}
 </div>`,
-sorted.map(s=>`<div class="item"><span>${esc(s.order?"["+s.order+"] ":"")}${esc(s.title)} <small>${esc(s.cat||"General")}</small></span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
-async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),title:v("w1"),desc:v("w2"),link:v("w3"),order:v("w4"),color:cb("wc4")?v("wc5"):""};
+adminItems("link").map(s=>`<div class="item"><span>${esc(s.order?"["+s.order+"] ":"")}${esc(s.title)} ${itemMeta(s)}</span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
+async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),sub:v("w0s"),title:v("w1"),desc:v("w2"),link:v("w3"),order:v("w4"),tags:parseTags(v("w5")),color:cb("wc4")?v("wc5"):""};
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
 
