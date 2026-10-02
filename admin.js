@@ -1,3 +1,4 @@
+/* Fuad Hasasn's dashboard (admin.js) v7.1 */
 const app=document.getElementById("app"),who=document.getElementById("who");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const v=id=>(document.getElementById(id)||{value:""}).value.trim();
@@ -5,7 +6,7 @@ const cb=id=>!!(document.getElementById(id)||{}).checked;
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],FLINKS=[],SET={};
 const FTYPES=["Mobile","WhatsApp","Email","LinkedIn","Facebook","Website","Custom"];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
-let EDIT={course:null,lesson:null,question:null,book:null,site:null};
+let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null};
 let mopts=[["",""],["",""],["",""]]; // matching rows while building a question
 const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
 const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
@@ -26,7 +27,7 @@ const panel=(t,form,list)=>`<h2>${esc(t)}</h2><div class="card">${form}</div><di
 const del=(col,id)=>`<button class="btn sm ghost" onclick="rm('${col}','${id}')">Delete</button>`;
 const editBtn=(kind,id)=>`<button class="btn sm ghost" onclick="startEdit('${kind}','${id}')">Edit</button>`;
 async function rm(col,id){if(!confirm("Delete this?"))return;await db.collection(col).doc(id).delete();await loadAll()}
-function cancelEdit(kind){EDIT[kind]=null;renderShell(window.__sec)}
+function cancelEdit(kind){EDIT[kind]=null;if(kind=="flink")window.__fForm=null;renderShell(window.__sec)}
 const PANEL={};
 
 /* ---------- SETTINGS ---------- */
@@ -56,7 +57,7 @@ ${e?`<button class="btn sm ghost" onclick="cancelEdit('course')">Cancel edit</bu
 </div>`,
 sorted.map(c=>`<div class="item"><span>${esc(c.order?"["+c.order+"] ":"")}${esc(c.name)} <small>${esc(c.desc||"")}</small></span><span>${editBtn("course",c.id)} ${del("courses",c.id)}</span></div>`).join(""))}
 function colorPicker(p,e){const has=!!(e&&e.color);return `<label><input type="checkbox" id="${p}4" ${has?"checked":""} onchange="document.getElementById('${p}5').disabled=!this.checked"> Use a custom card color (default: site theme)</label> <input type="color" id="${p}5" value="${e&&e.color?esc(e.color):"#2b6cb0"}" ${has?"":"disabled"}>`}
-function startEdit(kind,id){EDIT[kind]=id;renderShell(window.__sec)}
+function startEdit(kind,id){EDIT[kind]=id;if(kind=="flink")window.__fForm=null;renderShell(window.__sec);window.scrollTo(0,0)}
 async function saveCourse(){if(!v("c1"))return alert("Enter a course name");const data={name:v("c1"),desc:v("c2"),order:v("c3"),color:cb("c4")?v("c5"):""};
 if(EDIT.course){await db.collection("courses").doc(EDIT.course).update(data);EDIT.course=null}else{await db.collection("courses").add(Object.assign({hidden:false},data))}
 await loadAll()}
@@ -64,10 +65,6 @@ await loadAll()}
 /* ---------- LESSONS (with edit, course filter + search) ---------- */
 PANEL.lessons=()=>{const e=LESSONS.find(l=>l.id==EDIT.lesson);
 const filt=window.__lFilter||"all",search=window.__lSearch||"";
-let shown=LESSONS.slice();
-if(filt!=="all")shown=shown.filter(l=>l.courseId==filt);
-if(search)shown=shown.filter(l=>l.title.toLowerCase().includes(search.toLowerCase()));
-shown.sort((a,b)=>natSort(a.order,b.order));
 return panel("Lessons",`<div class="list">
 <select id="l1">${COURSES.map(c=>`<option value="${c.id}" ${e&&e.courseId==c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
 <input id="l2" placeholder="Lesson title" value="${esc(e?e.title:"")}">
@@ -80,9 +77,18 @@ ${e?`<button class="btn sm ghost" onclick="cancelEdit('lesson')">Cancel edit</bu
 <div class="list" style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
 <b>Browse lessons</b>
 <select onchange="window.__lFilter=this.value;renderShell('lessons')"><option value="all" ${filt=="all"?"selected":""}>— All courses —</option>${COURSES.map(c=>`<option value="${c.id}" ${filt==c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
-<input placeholder="Search lessons by title..." value="${esc(search)}" oninput="window.__lSearch=this.value;renderShell('lessons')">
+<input id="lsearch" placeholder="Search lessons (title, order, course)..." value="${esc(search)}" oninput="lSearchInput(this.value)">
 </div>`,
-shown.map(l=>`<div class="item"><span>${esc(l.order?"["+l.order+"] ":"")}${esc(l.title)} <small>${esc((COURSES.find(c=>c.id==l.courseId)||{}).name||"")}</small></span><span>${editBtn("lesson",l.id)} ${del("lessons",l.id)}</span></div>`).join("")||"<p class=muted>No lessons match.</p>")+materialsPanel()}
+`<div id="lresults">${lessonRows()}</div>`)+materialsPanel()}
+/* v7.1: only the result list is redrawn while typing, so the search box keeps focus */
+function lSearchInput(val){window.__lSearch=val;const el=document.getElementById("lresults");if(el)el.innerHTML=lessonRows()}
+function lessonRows(){const filt=window.__lFilter||"all",toks=(window.__lSearch||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
+let shown=LESSONS.slice();
+if(filt!=="all")shown=shown.filter(l=>l.courseId==filt);
+if(toks.length)shown=shown.filter(l=>{const h=[l.title,l.order,(COURSES.find(c=>c.id==l.courseId)||{}).name].join(" ").toLowerCase();return toks.every(t=>h.includes(t))});
+shown.sort((a,b)=>natSort(a.order,b.order));
+return `<p class="muted" style="font-size:13px;margin:4px 0">Showing ${shown.length} of ${LESSONS.length} lessons</p>`+
+(shown.map(l=>`<div class="item"><span>${esc(l.order?"["+l.order+"] ":"")}${esc(l.title)} <small>${esc((COURSES.find(c=>c.id==l.courseId)||{}).name||"")}</small></span><span>${editBtn("lesson",l.id)} ${del("lessons",l.id)}</span></div>`).join("")||"<p class=muted>No lessons match.</p>")}
 function materialsPanel(){if(!LESSONS.length)return"";
 const lid=LESSONS.find(l=>l.id==window.__matLesson)?window.__matLesson:LESSONS[0].id;
 const lesson=LESSONS.find(l=>l.id==lid),mats=(lesson&&lesson.materials)||[];
@@ -108,12 +114,19 @@ await loadAll()}
 const TYPE_ORDER={MCQ:0,Written:1,Matching:2};
 PANEL.questions=()=>{if(!LESSONS.length)return panel("Questions","<p>Add at least one <b>Lesson</b> first (left menu), then come back here.</p>","");
 const e=QUESTIONS.find(q=>q.id==EDIT.question);
-const sel=e?e.lessonId:((window.__qLesson=="all"||LESSONS.find(l=>l.id==window.__qLesson))?window.__qLesson:LESSONS[0].id);
+const lsel=((window.__qLesson=="all")||LESSONS.find(l=>l.id==window.__qLesson))?window.__qLesson:LESSONS[0].id; // lesson used for filtering / adding
+const sel=e?e.lessonId:lsel; // lesson the form works on
 if(!e)window.__qLesson=sel;
+window.__qSel=lsel;
 const type=e?e.type:(window.__qtype||"MCQ");
 if(e)mopts=e.type=="Matching"?(e.opts.length?e.opts.map(p=>p.split("|")):[["",""]]):mopts;
 const setNo=e?(e.setNo||1):(window.__qSet||1);
-const search=window.__qSearch||"";
+const search=window.__qSearch||"",fc=window.__qCourse||"all",ft=window.__qTypeF||"all";
+let fs=window.__qSetF||"all";
+const qCourse=q=>q.courseId||(LESSONS.find(l=>l.id==q.lessonId)||{}).courseId;
+const scope=QUESTIONS.filter(q=>(lsel=="all"||q.lessonId==lsel)&&(ft=="all"||q.type==ft)&&(fc=="all"||qCourse(q)==fc));
+const sets=[...new Set(scope.map(q=>q.setNo||1))].sort((a,b)=>a-b);
+if(fs!="all"&&!sets.includes(+fs)){fs="all";window.__qSetF="all"}
 const addForm=sel=="all"?`<p class="muted">Choose a specific lesson above to add a new question to it.</p>`:`
 <select id="q1" onchange="window.__qtype=this.value;renderShell('questions')">${["MCQ","Written","Matching"].map(t=>`<option ${t==type?"selected":""}>${t}</option>`).join("")}</select>
 <label>Set number (groups questions — trainees pick a set to practise)<br><input id="q0" type="number" min="1" value="${setNo}" style="width:100px"></label>
@@ -121,22 +134,44 @@ const addForm=sel=="all"?`<p class="muted">Choose a specific lesson above to add
 ${qform(type,e)}
 <button class="btn" onclick="saveQuestion('${type}')">${e?"Update question":"Add question"}</button>
 ${e?`<button class="btn sm ghost" onclick="mopts=[['','']];EDIT.question=null;renderShell('questions')">Cancel edit</button>`:""}`;
+const opt=(val,label,cur)=>`<option value="${esc(val)}" ${String(cur)==String(val)?"selected":""}>${esc(label)}</option>`;
+return `<h2>Questions</h2>
+<div class="card list">
+<b>Search &amp; filter questions</b>
+<input id="qsearch" placeholder="Keyword search — question, answer, options, lesson, course (several words: all must match)" value="${esc(search)}" oninput="qSearchInput(this.value)">
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<select title="Course" onchange="qSetCourse(this.value)">${opt("all","— All courses —",fc)}${COURSES.map(c=>opt(c.id,c.name,fc)).join("")}</select>
+<select title="Lesson" onchange="window.__qLesson=this.value;renderShell('questions')"><option value="all" ${lsel=="all"?"selected":""}>— All lessons —</option>${COURSES.filter(c=>fc=="all"||c.id==fc).map(c=>`<optgroup label="${esc(c.name)}">${LESSONS.filter(l=>l.courseId==c.id).map(l=>`<option value="${l.id}" ${lsel==l.id?"selected":""}>${esc(l.title)}</option>`).join("")}</optgroup>`).join("")}</select>
+<select title="Type" onchange="window.__qTypeF=this.value;renderShell('questions')">${opt("all","— All types —",ft)}${["MCQ","Written","Matching"].map(t=>opt(t,t,ft)).join("")}</select>
+<select title="Set" onchange="window.__qSetF=this.value;renderShell('questions')">${opt("all","— All sets —",fs)}${sets.map(n=>opt(n,"Set "+n,fs)).join("")}</select>
+<button class="btn sm ghost" onclick="qClear()">Clear filters</button>
+</div></div>
+<div class="card list"><b>${e?"Edit question":"Add a question"}</b>${addForm}</div>
+<div id="qresults" class="list">${qResults()}</div>`}
+/* v7.1: keyword search redraws only the result list (keeps focus + the add/edit form untouched) */
+function qSearchInput(val){window.__qSearch=val;const el=document.getElementById("qresults");if(el)el.innerHTML=qResults()}
+function qSetCourse(c){window.__qCourse=c;if(c!=="all"){const l=LESSONS.find(x=>x.id==window.__qLesson);if(!l||l.courseId!=c)window.__qLesson="all"}renderShell("questions")}
+function qClear(){window.__qSearch="";window.__qCourse="all";window.__qTypeF="all";window.__qSetF="all";window.__qLesson="all";renderShell("questions")}
+function qHay(q){const l=LESSONS.find(x=>x.id==q.lessonId)||{},c=COURSES.find(x=>x.id==(q.courseId||l.courseId))||{};
+ return [q.q,q.ans,(q.opts||[]).join(" "),q.type,"set "+(q.setNo||1),l.title,c.name].join(" ").toLowerCase()}
+function qResults(){const sel=window.__qSel||"all",fc=window.__qCourse||"all",ft=window.__qTypeF||"all",fs=window.__qSetF||"all";
+const toks=(window.__qSearch||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
 let qs=QUESTIONS.slice();
 if(sel!=="all")qs=qs.filter(q=>q.lessonId==sel);
-if(search)qs=qs.filter(q=>q.q.toLowerCase().includes(search.toLowerCase()));
+if(fc!=="all")qs=qs.filter(q=>(q.courseId||(LESSONS.find(l=>l.id==q.lessonId)||{}).courseId)==fc);
+if(ft!=="all")qs=qs.filter(q=>q.type==ft);
+if(fs!=="all")qs=qs.filter(q=>(q.setNo||1)==fs);
+if(toks.length)qs=qs.filter(q=>{const h=qHay(q);return toks.every(t=>h.includes(t))});
 qs.sort((a,b)=>{if(a.lessonId!==b.lessonId){const la=LESSONS.find(l=>l.id==a.lessonId)||{},lb=LESSONS.find(l=>l.id==b.lessonId)||{};const c=natSort(la.order,lb.order);if(c)return c;return(la.title||"").localeCompare(lb.title||"")}if(TYPE_ORDER[a.type]!=TYPE_ORDER[b.type])return TYPE_ORDER[a.type]-TYPE_ORDER[b.type];return(a.setNo||1)-(b.setNo||1)});
-return `<h2>Questions</h2><div class="card list">
-<select onchange="window.__qLesson=this.value;renderShell('questions')"><option value="all" ${sel=="all"?"selected":""}>— All lessons —</option>${COURSES.map(c=>`<optgroup label="${esc(c.name)}">${LESSONS.filter(l=>l.courseId==c.id).map(l=>`<option value="${l.id}" ${sel==l.id?"selected":""}>${esc(l.title)}</option>`).join("")}</optgroup>`).join("")}</select>
-<input placeholder="Search questions by text..." value="${esc(search)}" oninput="window.__qSearch=this.value;renderShell('questions')">
-${addForm}
-</div><div class="list">${qs.map(q=>`<div class="item"><span>${q.type} · Set ${q.setNo||1}: ${esc(q.q)}${sel=="all"?` <small>${esc((LESSONS.find(l=>l.id==q.lessonId)||{}).title||"")}</small>`:""}</span><span>${editBtn("question",q.id)} ${del("questions",q.id)}</span></div>`).join("")||"<p class=muted>No questions here yet.</p>"}</div>`}
+return `<p class="muted" style="font-size:13px;margin:4px 0">Showing ${qs.length} of ${QUESTIONS.length} questions</p>`+
+(qs.map(q=>`<div class="item"><span>${q.type} · Set ${q.setNo||1}: ${esc(q.q)}${sel=="all"?` <small>${esc((LESSONS.find(l=>l.id==q.lessonId)||{}).title||"")}</small>`:""}</span><span>${editBtn("question",q.id)} ${del("questions",q.id)}</span></div>`).join("")||"<p class=muted>No questions match.</p>")}
 function qform(type,e){
  if(type=="Written")return `<textarea id="qw_ans" rows="2" placeholder="Key words for the correct answer, comma separated">${esc(e?e.ans||"":"")}</textarea>`;
  if(type=="MCQ"){const opts=e?e.opts:["","","",""];while(opts.length<4)opts.push("");
   return `<div class="list">${opts.map((o,i)=>`<div style="display:flex;gap:8px;align-items:center"><input type="radio" name="qm_correct" value="${i}" ${e&&e.ans==o&&o?"checked":(i==0&&!e?"checked":"")}><input id="qm_o${i}" placeholder="Option ${i+1}${i>1?' (optional)':''}" value="${esc(o)}" style="flex:1"></div>`).join("")}</div>`}
  // Matching
  return `<div id="mrows">${mopts.map((p,i)=>`<div style="display:flex;gap:8px;margin:4px 0"><input placeholder="Left item" value="${esc(p[0])}" onchange="mopts[${i}][0]=this.value"><input placeholder="Matches with" value="${esc(p[1])}" onchange="mopts[${i}][1]=this.value"></div>`).join("")}</div><button type="button" class="btn sm ghost" onclick="mopts.push(['','']);renderShell('questions')">+ Add row</button>`}
-async function saveQuestion(type){const lessonId=window.__qLesson;
+async function saveQuestion(type){const eq=QUESTIONS.find(x=>x.id==EDIT.question);const lessonId=eq?eq.lessonId:window.__qLesson;
 if(!lessonId||lessonId=="all")return alert("Choose a specific lesson first");
 if(!v("q3"))return alert("Enter the question");
 let opts=[],ans="";
@@ -198,25 +233,39 @@ async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
 
-/* ---------- HOMEPAGE TILES ---------- */
-PANEL.tiles=()=>panel("Homepage Tiles","Extra cards on your homepage, linking anywhere you like — another page on your site, or an outside link.",
-`<div class="card list">
-<input id="t1" placeholder="Tile title (e.g. Certificates)">
-<input id="t2" placeholder="Short description">
-<input id="t3" placeholder="Link (e.g. #/books or https://drive.google.com/...)">
-<button class="btn" onclick="addTile()">Add tile</button>
-</div>`+TILES.map(t=>`<div class="item"><span>${esc(t.title)} <small>${esc(t.link)}</small></span>${del("tiles",t.id)}</div>`).join(""))
-async function addTile(){if(!v("t1"))return alert("Enter a title");await db.collection("tiles").add({title:v("t1"),desc:v("t2"),link:v("t3")});await loadAll()}
+/* ---------- HOMEPAGE TILES (add / edit / delete) ---------- */
+PANEL.tiles=()=>{const e=TILES.find(t=>t.id==EDIT.tile);
+return panel("Homepage Tiles",`<p class="muted" style="margin-top:0">Extra cards on your homepage, linking anywhere you like — another page on your site, or an outside link.</p>
+<div class="list">
+<input id="t1" placeholder="Tile title (e.g. Certificates)" value="${esc(e?e.title:"")}">
+<input id="t2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
+<input id="t3" placeholder="Link (e.g. #/books or https://drive.google.com/...)" value="${esc(e?e.link||"":"")}">
+<button class="btn" onclick="saveTile()">${e?"Update tile":"Add tile"}</button>
+${e?`<button class="btn sm ghost" onclick="cancelEdit('tile')">Cancel edit</button>`:""}
+</div>`,
+TILES.map(t=>`<div class="item"><span>${esc(t.title)} <small>${esc(t.desc||"")} ${esc(t.link||"")}</small></span><span>${editBtn("tile",t.id)} ${del("tiles",t.id)}</span></div>`).join(""))}
+async function saveTile(){if(!v("t1"))return alert("Enter a title");const data={title:v("t1"),desc:v("t2"),link:v("t3")};
+if(EDIT.tile){await db.collection("tiles").doc(EDIT.tile).update(data);EDIT.tile=null}else{await db.collection("tiles").add(data)}
+await loadAll()}
 
-/* ---------- FOOTER BUTTONS (preloaded icons: Mobile, WhatsApp, Email, LinkedIn, Facebook, Website, Custom) ---------- */
-PANEL.flinks=()=>panel("Footer Buttons",`<div class="list">
-<select id="f1" onchange="renderShell('flinks')">${FTYPES.map(t=>`<option ${t==(window.__fType||"Mobile")?"selected":""}>${t}</option>`).join("")}</select>
-<input id="f2" placeholder="Button label (e.g. Mobile, Chat on WhatsApp)">
-<input id="f3" placeholder="${v("f1")=="Email"?"Email address":v("f1")=="WhatsApp"?"Phone number (digits only) or full link":v("f1")=="Mobile"?"Phone number":"Link (https://...)"}">
-<label><input type="checkbox" id="f4" onchange="document.getElementById('f5').disabled=!this.checked"> Use a custom button color (default: preset color per type)</label> <input type="color" id="f5" value="#2b6cb0" disabled>
-<button class="btn" onclick="addFlink()">Add button</button>
+/* ---------- FOOTER BUTTONS (add / edit / delete; icons: Mobile, WhatsApp, Email, LinkedIn, Facebook, Website, Custom) ---------- */
+/* v7.1: the form is remembered before every re-render, so picking a type no longer jumps back to Mobile */
+function flKeep(){window.__fForm={type:v("f1")||"Mobile",label:v("f2"),link:v("f3"),on:cb("f4"),color:v("f5")||"#2b6cb0"};renderShell("flinks")}
+PANEL.flinks=()=>{const e=FLINKS.find(f=>f.id==EDIT.flink);
+const F=window.__fForm||(e?{type:e.type||"Custom",label:e.label||"",link:e.link||"",on:!!e.color,color:e.color||"#2b6cb0"}:{type:"Mobile",label:"",link:"",on:false,color:"#2b6cb0"});
+const ph=F.type=="Email"?"Email address":F.type=="WhatsApp"?"Phone number (digits only) or full link":F.type=="Mobile"?"Phone number":"Link (https://...)";
+return panel("Footer Buttons",`<div class="list">
+<select id="f1" onchange="flKeep()">${FTYPES.map(t=>`<option ${t==F.type?"selected":""}>${t}</option>`).join("")}</select>
+<input id="f2" placeholder="Button label (e.g. Mobile, Chat on WhatsApp)" value="${esc(F.label)}">
+<input id="f3" placeholder="${ph}" value="${esc(F.link)}">
+<label><input type="checkbox" id="f4" ${F.on?"checked":""} onchange="document.getElementById('f5').disabled=!this.checked"> Use a custom button color (default: preset color per type)</label> <input type="color" id="f5" value="${esc(F.color)}" ${F.on?"":"disabled"}>
+<button class="btn" onclick="saveFlink()">${e?"Update button":"Add button"}</button>
+${e?`<button class="btn sm ghost" onclick="cancelEdit('flink')">Cancel edit</button>`:""}
 </div>
 <p class="muted" style="font-size:13px">Preloaded icons: ${FTYPES.map(t=>FICON[t]+" "+t).join("  ·  ")}</p>`,
-FLINKS.map(f=>`<div class="item"><span>${FICON[f.type]||"🔗"} ${esc(f.label)} <small>${esc(f.type)}: ${esc(f.link)}</small></span>${del("footerlinks",f.id)}</div>`).join(""))
-async function addFlink(){if(!v("f2")||!v("f3"))return alert("Enter a label and a link/number");
-await db.collection("footerlinks").add({type:v("f1"),label:v("f2"),link:v("f3"),color:cb("f4")?v("f5"):""});window.__fType=v("f1");await loadAll()}
+FLINKS.map(f=>`<div class="item"><span>${FICON[f.type]||"🔗"} ${esc(f.label)} <small>${esc(f.type)}: ${esc(f.link)}</small></span><span>${editBtn("flink",f.id)} ${del("footerlinks",f.id)}</span></div>`).join(""))}
+async function saveFlink(){if(!v("f2")||!v("f3"))return alert("Enter a label and a link/number");
+const data={type:v("f1"),label:v("f2"),link:v("f3"),color:cb("f4")?v("f5"):""};
+if(EDIT.flink){await db.collection("footerlinks").doc(EDIT.flink).update(data);EDIT.flink=null;window.__fForm=null}
+else{await db.collection("footerlinks").add(data);window.__fForm={type:data.type,label:"",link:"",on:false,color:"#2b6cb0"}}
+await loadAll()}
