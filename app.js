@@ -1,6 +1,6 @@
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
-let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[];
+let SET={heroTitle:"Allies Learn Together",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
+let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
 const FCOLOR={Mobile:"rgba(255,255,255,.16)",WhatsApp:"#145214",Email:"#7a1f1f",LinkedIn:"#0a3d62",Facebook:"#1456a3",Website:"#8a5a2b",Custom:"#3a3a3a"};
 function flinkHref(it){const v=(it.link||"").trim();
@@ -18,7 +18,7 @@ async function loadAll(){
  const ord=a=>a.sort((x,y)=>natSort(x.order,y.order));
  const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
  COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
- LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");FLINKS=await grab("footerlinks");
+ LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");FLINKS=await grab("footerlinks");CATS=await grab("categories");LCATS=await grab("linkcats");
  document.getElementById("brandLink").innerHTML=(SET.logoUrl?`<img src="${esc(SET.logoUrl)}" alt="logo" style="height:30px;vertical-align:middle;margin-right:8px;border-radius:6px">`:"")+esc(SET.heroTitle||"Development Allies BD");
  document.title=SET.heroTitle||"Development Allies BD";
  renderFooterLinks();
@@ -102,18 +102,53 @@ function renderQuiz(){if(!QUIZ)return;
   app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card"><h3>${esc(q.q)}</h3><p><small class="muted">Your answer:</small><br>${esc(r.your)}</p><div class="item ${r.ok?"good":"bad"}"><span>Sample answer: ${esc(r.correct)}</span></div></div><button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button>`;return}
  app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card"><h3>${esc(q.q)}</h3>${qInput(q)}</div><button class="btn" onclick="${q.type=="Written"?"checkWritten()":"quizNext()"}">${q.type=="Written"?"Check answer":(isLast?"Finish set":"Next question")}</button>`}
 
-const BOOK_PREVIEW=8;
-const bookCard=b=>`<div class="card"${cstyle(b.color)}><h3>${esc(b.title)}</h3><a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`;
-V.books=(sub,cat)=>{if(sub=="cat"&&cat){const list=BOOKS.filter(b=>b.cat==cat).sort((a,b)=>natSort(a.order,b.order));
- return H(cat,`All ${list.length} books in this category.`)+`<div class="grid">${list.map(bookCard).join("")||"<p class=muted>No books here yet.</p>"}</div><p><a class="btn ghost" href="#/books">← Back to Books</a></p>`}
-const cats=[...new Set(BOOKS.map(b=>b.cat))];
-return H("Books","Browse by category.")+(cats.map(c=>{const list=BOOKS.filter(b=>b.cat==c).sort((a,b)=>natSort(a.order,b.order)),preview=list.slice(0,BOOK_PREVIEW);
- return `<h3 class="grp">${esc(c)}</h3><div class="grid">${preview.map(bookCard).join("")}</div>${list.length>BOOK_PREVIEW?`<p><a class="btn sm ghost" href="#/books/cat/${encodeURIComponent(c)}">View all ${list.length} in ${esc(c)} →</a></p>`:""}`}).join("")||"<p class=muted>No books yet.</p>")};
-V.sites=()=>{const cats=[...new Set(SITES.map(s=>s.cat||"General"))];return H("Links","Helpful links, by category.")+cats.map(c=>`<h3 class="grp">${esc(c)}</h3><div class="grid">${SITES.filter(s=>(s.cat||"General")==c).map(s=>`<div class="card"${cstyle(s.color)}><h3>${esc(s.title)}</h3><p>${esc(s.desc||"")}</p><a class="btn sm" href="${esc(s.link)}" target="_blank" rel="noopener">Visit</a></div>`).join("")}</div>`).join("")||"<p class=muted>No links yet.</p>"};
+/* ---------------- BOOKS + LINKS: categories (ordered), subcategories, #tags, search ---------------- */
+const SQ={books:"",sites:""};
+const tagsOf=x=>Array.isArray(x.tags)?x.tags:[];
+const catName=x=>x.cat||"General";
+const catOrd=x=>(x.order===undefined||x.order===null||x.order==="")?1e9:Number(x.order);
+const tagLine=(kind,x)=>tagsOf(x).length?`<div class="tags">${tagsOf(x).map(t=>`<a class="tagchip" href="#/${kind}/tag/${encodeURIComponent(t)}">#${esc(t)}</a>`).join("")}</div>`:"";
+const bookCard=b=>`<div class="card"${cstyle(b.color)}><h3>${esc(b.title)}</h3>${tagLine("books",b)}<a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`;
+const siteCard=s=>`<div class="card"${cstyle(s.color)}><h3>${esc(s.title)}</h3><p>${esc(s.desc||"")}</p>${tagLine("sites",s)}<a class="btn sm" href="${esc(s.link)}" target="_blank" rel="noopener">Visit</a></div>`;
+const BK={
+ books:{label:"Books",noun:"book",desc:"Browse by category, search, or tap a #tag to find similar books.",items:()=>BOOKS,cats:()=>CATS,card:bookCard,preview:8},
+ sites:{label:"Links",noun:"link",desc:"Helpful links, by category. Tap a #tag to find similar links.",items:()=>SITES,cats:()=>LCATS,card:siteCard,preview:0}};
+function orderedCats(kind){const items=BK[kind].items(),used=[...new Set(items.map(catName))];
+ const names=BK[kind].cats().slice().sort((a,b)=>catOrd(a)-catOrd(b)||String(a.name).localeCompare(String(b.name))).map(c=>c.name).filter(n=>used.includes(n));
+ used.filter(n=>!names.includes(n)).forEach(n=>names.push(n));return names}
+function subOrder(kind,cat,list){const doc=BK[kind].cats().find(c=>c.name==cat),defined=(doc&&doc.subs)||[],used=[...new Set(list.map(x=>x.sub).filter(Boolean))];
+ const res=defined.filter(s=>used.includes(s));used.filter(s=>!res.includes(s)).forEach(s=>res.push(s));return res}
+function groupHtml(kind,cat,list,limit){const B=BK[kind];list=list.slice().sort((a,b)=>natSort(a.order,b.order));
+ const blocks=[{sub:"",items:list.filter(x=>!x.sub)}].concat(subOrder(kind,cat,list).map(s=>({sub:s,items:list.filter(x=>x.sub==s)}))).filter(b=>b.items.length);
+ let shown=0,html="";
+ for(const b of blocks){let its=b.items;if(limit){const left=limit-shown;if(left<=0)break;its=its.slice(0,left)}shown+=its.length;
+  html+=(b.sub?`<h4 class="subgrp">${esc(b.sub)}</h4>`:"")+`<div class="grid">${its.map(B.card).join("")}</div>`}
+ return{html,total:list.length,shown}}
+function groupsByCat(kind,list,limit){const B=BK[kind];
+ return orderedCats(kind).map(c=>{const l=list.filter(x=>catName(x)==c);if(!l.length)return"";const g=groupHtml(kind,c,l,limit);
+  return `<h3 class="grp">${esc(c)}</h3>${g.html}${g.shown<g.total?`<p><a class="btn sm ghost" href="#/${kind}/cat/${encodeURIComponent(c)}">View all ${g.total} in ${esc(c)} →</a></p>`:""}`}).join("")}
+function browseResults(kind){const B=BK[kind],toks=(SQ[kind]||"").trim().toLowerCase().split(/\s+/).filter(Boolean);let items=B.items();
+ if(toks.length){items=items.filter(x=>{const h=[x.title,x.desc,catName(x),x.sub,tagsOf(x).map(t=>"#"+t).join(" ")].join(" ").toLowerCase();return toks.every(t=>h.includes(t))});
+  return `<p class="muted">${items.length} result${items.length==1?"":"s"}</p>`+(groupsByCat(kind,items,0)||"<p class=muted>Nothing matches your search.</p>")}
+ return groupsByCat(kind,items,B.preview)||`<p class=muted>No ${B.label.toLowerCase()} yet.</p>`}
+function bSearch(kind,val){SQ[kind]=val;const el=document.getElementById("bresults");if(el)el.innerHTML=browseResults(kind)}
+function browse(kind,mode,a,b){const B=BK[kind],items=B.items(),back=`<p><a class="btn ghost" href="#/${kind}">← Back to ${B.label}</a></p>`;
+ if(mode=="cat"&&a){const sub=b||"",inCat=items.filter(x=>catName(x)==a),list=inCat.filter(x=>!sub||x.sub==sub),subs=subOrder(kind,a,inCat);
+  const bar=subs.length?`<div class="subbar"><a class="tagchip ${sub?"":"on"}" href="#/${kind}/cat/${encodeURIComponent(a)}">All</a>${subs.map(s=>`<a class="tagchip ${s==sub?"on":""}" href="#/${kind}/cat/${encodeURIComponent(a)}/${encodeURIComponent(s)}">${esc(s)}</a>`).join("")}</div>`:"";
+  return H(sub?a+" › "+sub:a,`${list.length} ${B.noun}${list.length==1?"":"s"}.`)+bar+(groupHtml(kind,a,list,0).html||`<p class=muted>Nothing here yet.</p>`)+back}
+ if(mode=="tag"&&a){const list=items.filter(x=>tagsOf(x).includes(a));
+  return H("#"+a,`${list.length} ${B.noun}${list.length==1?"":"s"} with this tag.`)+(groupsByCat(kind,list,0)||`<p class=muted>Nothing has this tag.</p>`)+back}
+ const cnt={};items.forEach(x=>tagsOf(x).forEach(t=>cnt[t]=(cnt[t]||0)+1));
+ const tags=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x]||x.localeCompare(y));
+ return H(B.label,B.desc)+`<input class="search" placeholder="Search ${B.label.toLowerCase()} by title, category or #tag…" value="${esc(SQ[kind])}" oninput="bSearch('${kind}',this.value)">`+
+  (tags.length?`<div class="tagcloud">${tags.map(t=>`<a class="tagchip" href="#/${kind}/tag/${encodeURIComponent(t)}">#${esc(t)}<small>${cnt[t]}</small></a>`).join("")}</div>`:"")+
+  `<div id="bresults">${browseResults(kind)}</div>`}
+V.books=(m,a,b)=>browse("books",m,a,b);
+V.sites=(m,a,b)=>browse("sites",m,a,b);
 function go(h){location.hash=h}
 function route(){const parts=location.hash.slice(2).split("/").map(decodeURIComponent),p=parts[0]||"home";
- QUIZ=null;
- app.innerHTML=p=="practice"?V.practice(parts.slice(1)):(V[p]||V.home)(parts[1],parts[2]);
+ QUIZ=null;SQ.books=SQ.sites="";
+ app.innerHTML=p=="practice"?V.practice(parts.slice(1)):(V[p]||V.home)(parts[1],parts[2],parts[3]);
  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.getAttribute("href")=="#/"+(p=="course"?"courses":p)))}
 addEventListener("hashchange",()=>{route();scrollTo(0,0)});
 loadAll();
