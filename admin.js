@@ -1,5 +1,12 @@
-/* Trainer dashboard (admin.js) v7.2 (7.1 fixes + categories, subcategories, tags, ordering) */
+/* ALT - Trainer dashboard (admin.js) v7.3 (7.2 + category/subcategory/search filters for Books & Links, image-link fixes + live preview) */
 const app=document.getElementById("app"),who=document.getElementById("who");
+/* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
+function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
+ if(/^https?:\/\/(drive|docs)\.google\.com\//i.test(u)){m=u.match(/\/d\/([\w-]{10,})/)||u.match(/[?&]id=([\w-]{10,})/);if(m)return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1600"}
+ if(/^https?:\/\/(www\.)?dropbox\.com\//i.test(u))return u.replace(/^https?:\/\/(www\.)?dropbox\.com/i,"https://dl.dropboxusercontent.com").replace(/([?&])dl=\d/,"$1").replace(/[?&]+$/,"").replace(/\?&/,"?");
+ m=u.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+?)(\?.*)?$/i);if(m)return "https://raw.githubusercontent.com/"+m[1]+"/"+m[2]+"/"+m[3];
+ m=u.match(/^https?:\/\/(?:www\.)?imgur\.com\/(?:gallery\/|a\/)?(\w{5,8})$/i);if(m)return "https://i.imgur.com/"+m[1]+".png";
+ return u}
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const v=id=>(document.getElementById(id)||{value:""}).value.trim();
 const cb=id=>!!(document.getElementById(id)||{}).checked;
@@ -36,12 +43,18 @@ PANEL.settings=()=>`<h2>Site Settings</h2><div class="card list">
 <label>Homepage welcome text (short, under the title)<br><textarea id="s2" rows="2" style="width:100%">${esc(SET.heroText||"")}</textarea></label>
 <label>About / narrative heading<br><input id="s5" value="${esc(SET.aboutTitle||"")}" style="width:100%"></label>
 <label>About / narrative text (longer story about your training, shown on Home)<br><textarea id="s6" rows="5" style="width:100%">${esc(SET.aboutText||"")}</textarea></label>
-<label>Small logo — paste an image link (top-left, next to your site name)<br><input id="s7" placeholder="https://... (image link)" value="${esc(SET.logoUrl||"")}" style="width:100%"></label>
-<label>Homepage image — paste an image link (shown below the welcome text)<br><input id="s8" placeholder="https://... (image link)" value="${esc(SET.heroImageUrl||"")}" style="width:100%"></label>
+<label>Small logo — paste an image link (top-left, next to your site name)<br><input id="s7" placeholder="https://... (image link)" value="${esc(SET.logoUrl||"")}" oninput="imgPrev('s7','prev7',40)" style="width:100%"></label>
+<div id="prev7">${imgPrevHtml(SET.logoUrl,40)}</div>
+<label>Homepage image — paste an image link (shown below the welcome text)<br><input id="s8" placeholder="https://... (image link)" value="${esc(SET.heroImageUrl||"")}" oninput="imgPrev('s8','prev8',140)" style="width:100%"></label>
+<div id="prev8">${imgPrevHtml(SET.heroImageUrl,140)}</div>
 <label><input type="checkbox" id="s3" ${SET.showBooks!==false?"checked":""}> Show Books section</label>
 <label><input type="checkbox" id="s4" ${SET.showSites!==false?"checked":""}> Show Links section</label>
 <button class="btn" onclick="saveSettings()">Save</button></div>
-<div class="note" style="color:var(--mut);font-size:14px;margin-top:8px">Tip: upload an image to Google Drive, set it to "Anyone with the link," open it, then use a link like <code>https://drive.google.com/uc?export=view&id=FILE_ID</code> (replace FILE_ID with yours) so it displays as an image rather than opening a preview page.</div>`;
+<div class="note" style="color:var(--mut);font-size:14px;margin-top:8px"><b>Image links:</b> you can now paste a normal Google Drive "Share" link (file must be set to <i>Anyone with the link</i>), a Dropbox share link, a GitHub file link, or any direct image address ending in .png / .jpg / .webp / .svg. The site converts it automatically and shows a preview above. Links to web <i>pages</i> (Facebook, Pinterest, Google Photos, Google Images) are not images and will not work. Tip: an image uploaded to your own GitHub repository, e.g. <code>logo.png</code>, also works and never breaks.</div>`;
+/* v7.3: live image preview in Site Settings */
+function imgPrevHtml(url,h){url=(url||"").trim();if(!url)return"";const u=imgUrl(url);
+ return `<div class="muted" style="font-size:13px">Preview:</div><img src="${esc(u)}" alt="" referrerpolicy="no-referrer" style="max-height:${h}px;max-width:100%;border-radius:8px;background:rgba(255,255,255,.06)" onerror="this.outerHTML='<span style=&quot;color:#ffb0b0;font-size:13px&quot;>Could not load this image. Check that it is shared as Anyone with the link and that it is a real image, not a web page.</span>'">`}
+function imgPrev(inputId,boxId,h){const b=document.getElementById(boxId);if(b)b.innerHTML=imgPrevHtml(v(inputId),h)}
 async function saveSettings(){await db.collection("config").doc("main").set({heroTitle:v("s1"),heroText:v("s2"),aboutTitle:v("s5"),aboutText:v("s6"),logoUrl:v("s7"),heroImageUrl:v("s8"),showBooks:cb("s3"),showSites:cb("s4")});alert("Saved. Refresh the public site to see changes.");loadAll()}
 
 /* ---------- COURSES (with edit) ---------- */
@@ -269,13 +282,45 @@ async function subDel(k,id,j){const C=CK[k],c=C.cats().find(x=>x.id==id),subs=su
  subs.splice(j,1);await db.collection(C.col).doc(id).update({subs});
  await batchUpdate(C.icol,aff.map(x=>[x.id,{sub:""}]));await loadAll()}
 
+/* ----- v7.3: Books & Links list: filter by category / subcategory + keyword search (like Lessons & Questions) ----- */
+const KF={book:{cat:"all",sub:"all",q:""},link:{cat:"all",sub:"all",q:""}};
+const KIT={book:{kind:"book",col:"books"},link:{kind:"site",col:"sites"}};
+function kfCatNames(k){const defined=sortedCats(k).map(c=>c.name),used=[...new Set(CK[k].items().map(x=>x.cat).filter(Boolean))];used.filter(n=>!defined.includes(n)).forEach(n=>defined.push(n));return defined}
+function kfSubNames(k,cat){const c=CK[k].cats().find(x=>x.name==cat),defined=(c&&c.subs)||[],used=[...new Set(CK[k].items().filter(x=>x.cat==cat).map(x=>x.sub).filter(Boolean))];const r=defined.slice();used.filter(n=>!r.includes(n)).forEach(n=>r.push(n));return r}
+function kfList(k){const f=KF[k],toks=f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);let list=adminItems(k);
+ if(f.cat==="__none")list=list.filter(x=>!x.cat);else if(f.cat!=="all")list=list.filter(x=>x.cat===f.cat);
+ if(f.sub==="__none")list=list.filter(x=>!x.sub);else if(f.sub!=="all")list=list.filter(x=>x.sub===f.sub);
+ if(toks.length)list=list.filter(x=>{const h=[x.title,x.desc,x.link,x.cat||"General",x.sub,x.order,(x.tags||[]).map(t=>"#"+t).join(" ")].join(" ").toLowerCase();return toks.every(t=>h.includes(t))});
+ return list}
+function kfControls(k){const f=KF[k],items=CK[k].items(),cats=kfCatNames(k),o=(val,label,cur)=>`<option value="${esc(val)}" ${String(cur)===String(val)?"selected":""}>${esc(label)}</option>`;
+ const noCat=items.filter(x=>!x.cat).length;
+ let subSel="";
+ if(f.cat!=="all"&&f.cat!=="__none"){const subs=kfSubNames(k,f.cat);if(subs.length)subSel=`<select title="Subcategory" onchange="kfSub('${k}',this.value)">${o("all","— All subcategories —",f.sub)}${subs.map(n=>o(n,n+" ("+items.filter(x=>x.cat===f.cat&&x.sub===n).length+")",f.sub)).join("")}${o("__none","(no subcategory)",f.sub)}</select>`}
+ return `<b>Browse ${CK[k].noun}s</b>
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<select title="Category" onchange="kfCat('${k}',this.value)">${o("all","— All categories ("+items.length+") —",f.cat)}${cats.map(n=>o(n,n+" ("+items.filter(x=>x.cat===n).length+")",f.cat)).join("")}${noCat?o("__none","General / no category ("+noCat+")",f.cat):""}</select>
+${subSel}
+<button class="btn sm ghost" onclick="kfClear('${k}')">Clear filters</button></div>
+<input id="kfq_${k}" placeholder="Keyword search — title, link, category, subcategory, #tag (several words: all must match)" value="${esc(f.q)}" oninput="kfSearch('${k}',this.value)">`}
+function kfResults(k){const list=kfList(k),total=CK[k].items().length,K=KIT[k];
+ return `<p class="muted" style="font-size:13px;margin:4px 0">Showing ${list.length} of ${total} ${CK[k].noun}s</p>`+
+ (list.map(x=>`<div class="item"><span>${esc(x.order?"["+x.order+"] ":"")}${esc(x.title)} ${itemMeta(x)}</span><span>${editBtn(K.kind,x.id)} ${del(K.col,x.id)}</span></div>`).join("")||`<p class="muted">No ${CK[k].noun}s match.</p>`)}
+function kfWrap(k){return `<div class="list"><div id="kfctl_${k}" class="card list">${kfControls(k)}</div><div id="kfres_${k}" class="list">${kfResults(k)}</div></div>`}
+function kfRedraw(k){const c=document.getElementById("kfctl_"+k),r=document.getElementById("kfres_"+k);if(c)c.innerHTML=kfControls(k);if(r)r.innerHTML=kfResults(k)}
+function kfSearch(k,val){KF[k].q=val;const r=document.getElementById("kfres_"+k);if(r)r.innerHTML=kfResults(k)} /* only the list is redrawn, so the search box keeps focus */
+function kfCat(k,val){KF[k].cat=val;KF[k].sub="all";kfRedraw(k)}
+function kfSub(k,val){KF[k].sub=val;kfRedraw(k)}
+function kfClear(k){KF[k]={cat:"all",sub:"all",q:""};kfRedraw(k)}
+/* default category in the add form follows the category you are browsing */
+function kfDefaultCat(k,cats){const f=KF[k].cat;if(f==="__none")return"";return(f!=="all"&&cats.some(c=>c.name===f))?f:cats[0].name}
+
 PANEL.categories=()=>catPanel("book");
 PANEL.linkcats=()=>catPanel("link");
 
 /* ---------- BOOKS (category + subcategory + #tags, edit) ---------- */
 PANEL.books=()=>{const e=BOOKS.find(b=>b.id==EDIT.book);
 if(!CATS.length)return panel("Books",`<p>Add at least one <b>Book Category</b> first (left menu), then come back here.</p>`,"");
-const cats=sortedCats("book"),cur=e?(e.cat||""):cats[0].name;
+const cats=sortedCats("book"),cur=e?(e.cat||""):kfDefaultCat("book",cats);
 return panel("Books",`<div class="list">
 <select id="b1" onchange="document.getElementById('b1s').innerHTML=subOptions('book',this.value,'')">${cats.map(c=>`<option value="${esc(c.name)}" ${cur==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}<option value="" ${cur===""?"selected":""}>— No category (General) —</option></select>
 <select id="b1s">${subOptions("book",cur,e?e.sub||"":"")}</select>
@@ -288,7 +333,7 @@ ${colorPicker("bc",e)}
 <button class="btn" onclick="saveBook()">${e?"Update book":"Add book"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('book')">Cancel edit</button>`:""}
 </div>`,
-adminItems("book").map(b=>`<div class="item"><span>${esc(b.order?"["+b.order+"] ":"")}${esc(b.title)} ${itemMeta(b)}</span><span>${editBtn("book",b.id)} ${del("books",b.id)}</span></div>`).join(""))}
+kfWrap("book"))}
 async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),sub:v("b1s"),title:v("b2"),link:v("b3"),order:v("b4"),tags:parseTags(v("b5")),color:cb("bc4")?v("bc5"):""};
 if(EDIT.book){await db.collection("books").doc(EDIT.book).update(data);EDIT.book=null}else{await db.collection("books").add(data)}
 await loadAll()}
@@ -296,7 +341,7 @@ await loadAll()}
 /* ---------- LINKS (category + subcategory + #tags, edit) ---------- */
 PANEL.sites=()=>{const e=SITES.find(s=>s.id==EDIT.site);
 if(!LCATS.length)return panel("Links",`<p>Add at least one <b>Link Category</b> first (left menu), then come back here.</p>`,"");
-const cats=sortedCats("link"),cur=e?(e.cat||""):cats[0].name;
+const cats=sortedCats("link"),cur=e?(e.cat||""):kfDefaultCat("link",cats);
 return panel("Links",`<div class="list">
 <select id="w0" onchange="document.getElementById('w0s').innerHTML=subOptions('link',this.value,'')">${cats.map(c=>`<option value="${esc(c.name)}" ${cur==c.name?"selected":""}>${esc(c.name)}</option>`).join("")}<option value="" ${cur===""?"selected":""}>— No category (General) —</option></select>
 <select id="w0s">${subOptions("link",cur,e?e.sub||"":"")}</select>
@@ -310,7 +355,7 @@ ${colorPicker("wc",e)}
 <button class="btn" onclick="saveSite()">${e?"Update link":"Add link"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('site')">Cancel edit</button>`:""}
 </div>`,
-adminItems("link").map(s=>`<div class="item"><span>${esc(s.order?"["+s.order+"] ":"")}${esc(s.title)} ${itemMeta(s)}</span><span>${editBtn("site",s.id)} ${del("sites",s.id)}</span></div>`).join(""))}
+kfWrap("link"))}
 async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),sub:v("w0s"),title:v("w1"),desc:v("w2"),link:v("w3"),order:v("w4"),tags:parseTags(v("w5")),color:cb("wc4")?v("wc5"):""};
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
