@@ -1,4 +1,4 @@
-/* ALT - Trainer dashboard (admin.js) v7.3 (7.2 + category/subcategory/search filters for Books & Links, image-link fixes + live preview) */
+/* ALT - Trainer dashboard (admin.js) v7.4 (7.3 + category/subcategory/search filters for Books & Links, image-link fixes + live preview) */
 const app=document.getElementById("app"),who=document.getElementById("who");
 /* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
 function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
