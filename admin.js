@@ -1,4 +1,4 @@
-/* ALT - Trainer dashboard (admin.js) v7.4 (7.3 + category/subcategory/search filters for Books & Links, image-link fixes + live preview) */
+/* ALT - Trainer dashboard (admin.js) v7.4 (7.3 + site pages, colored tiles with quick links) */
 const app=document.getElementById("app"),who=document.getElementById("who");
 /* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
 function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
@@ -10,10 +10,10 @@ function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const v=id=>(document.getElementById(id)||{value:""}).value.trim();
 const cb=id=>!!(document.getElementById(id)||{}).checked;
-let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],FLINKS=[],SET={};
+let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],FLINKS=[],PAGES=[],SET={};
 const FTYPES=["Mobile","WhatsApp","Email","LinkedIn","Facebook","Website","Custom"];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
-let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null,catbook:null,catlink:null};
+let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null,catbook:null,catlink:null,page:null};
 let mopts=[["",""],["",""],["",""]]; // matching rows while building a question
 const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
 const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
@@ -24,10 +24,10 @@ function doLogin(){auth.signInWithEmailAndPassword(v("em"),v("pw")).catch(e=>doc
 function logout(){auth.signOut()}
 async function loadAll(){
  const grab=async n=>{const q=await db.collection(n).get();return q.docs.map(d=>({id:d.id,...d.data()}))};
- [COURSES,LESSONS,QUESTIONS,BOOKS,SITES,CATS,LCATS,TILES,FLINKS]=await Promise.all(["courses","lessons","questions","books","sites","categories","linkcats","tiles","footerlinks"].map(grab));
+ [COURSES,LESSONS,QUESTIONS,BOOKS,SITES,CATS,LCATS,TILES,FLINKS,PAGES]=await Promise.all(["courses","lessons","questions","books","sites","categories","linkcats","tiles","footerlinks","pages"].map(grab));
  const s=await db.collection("config").doc("main").get();SET=s.exists?s.data():{heroTitle:"Development Allies BD",heroText:"",showBooks:true,showSites:true};
  renderShell(window.__sec||"settings")}
-const NAV=[["settings","Site Settings"],["courses","Courses"],["lessons","Lessons"],["questions","Questions"],["categories","Book Categories"],["books","Books"],["linkcats","Link Categories"],["sites","Links"],["tiles","Homepage Tiles"],["flinks","Footer Buttons"]];
+const NAV=[["settings","Site Settings"],["courses","Courses"],["lessons","Lessons"],["questions","Questions"],["categories","Book Categories"],["books","Books"],["linkcats","Link Categories"],["sites","Links"],["tiles","Homepage Tiles"],["pages","Site Pages"],["flinks","Footer Buttons"]];
 function renderShell(sec){window.__sec=sec;app.innerHTML=`<div class="dash"><aside class="card">${NAV.map(x=>`<a href="javascript:renderShell('${x[0]}')" class="${x[0]==sec?"on":""}">${x[1]}</a>`).join("")}<a href="javascript:logout()" style="color:#ff9a9a">Log out</a></aside><div id="panel"></div></div>`;
  document.getElementById("panel").innerHTML=PANEL[sec]()}
 const panel=(t,form,list)=>`<h2>${esc(t)}</h2><div class="card">${form}</div><div class="list">${list||"<p class=muted>Nothing yet.</p>"}</div>`;
@@ -210,7 +210,7 @@ const CK={
 const catSort=(a,b)=>{const f=x=>(x.order===undefined||x.order===null||x.order==="")?1e9:Number(x.order);return (f(a)-f(b))||String(a.name).localeCompare(String(b.name))};
 const sortedCats=k=>CK[k].cats().slice().sort(catSort);
 async function batchUpdate(col,pairs){for(let i=0;i<pairs.length;i+=400){const b=db.batch();pairs.slice(i,i+400).forEach(p=>b.update(db.collection(col).doc(p[0]),p[1]));await b.commit()}}
-function parseTags(s){const out=[];String(s||"").split(/[,\s;]+/).forEach(t=>{t=t.replace(/^#+/,"").toLowerCase().replace(/[^\p{L}\p{N}_-]/gu,"");if(t&&!out.includes(t))out.push(t)});return out.slice(0,12)}
+function parseTags(s){const out=[];String(s||"").split(/[,\s;]+/).forEach(t=>{t=t.replace(/^#+/,"").toLowerCase().replace(/[^\p{L}\p{M}\p{N}_-]/gu,"");if(t&&!out.includes(t))out.push(t)});return out.slice(0,12)}
 const tagsTxt=x=>(x&&Array.isArray(x.tags)?x.tags:[]).map(t=>"#"+t).join(", ");
 function addTagTo(id,t){const el=document.getElementById(id);if(!el)return;const cur=parseTags(el.value);if(!cur.includes(t))cur.push(t);el.value=cur.map(x=>"#"+x).join(", ")}
 function tagHints(k,inputId){const all={};CK[k].items().forEach(x=>(x.tags||[]).forEach(t=>all[t]=(all[t]||0)+1));
@@ -360,20 +360,51 @@ async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
 
-/* ---------- HOMEPAGE TILES (add / edit / delete) ---------- */
+/* ---------- HOMEPAGE TILES (add / edit / delete, custom color, quick link to sections and your pages) ---------- */
+const pageHref=p=>"#/page/"+encodeURIComponent(p.slug);
+function linkChoices(){return `<optgroup label="Site sections">${[["#/home","Home"],["#/courses","Courses"],["#/practice","Practice"],["#/books","Books"],["#/sites","Links"]].map(x=>`<option value="${x[0]}">${x[1]}</option>`).join("")}</optgroup>`+
+ (PAGES.length?`<optgroup label="Your site pages">${PAGES.map(p=>`<option value="${esc(pageHref(p))}">${esc(p.title)}</option>`).join("")}</optgroup>`:"")}
 PANEL.tiles=()=>{const e=TILES.find(t=>t.id==EDIT.tile);
-return panel("Homepage Tiles",`<p class="muted" style="margin-top:0">Extra cards on your homepage, linking anywhere you like — another page on your site, or an outside link.</p>
+return panel("Homepage Tiles",`<p class="muted" style="margin-top:0">Extra cards on your homepage. A tile can open one of your <b>Site Pages</b>, a section of the site, or any outside link.</p>
 <div class="list">
 <input id="t1" placeholder="Tile title (e.g. Certificates)" value="${esc(e?e.title:"")}">
 <input id="t2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
-<input id="t3" placeholder="Link (e.g. #/books or https://drive.google.com/...)" value="${esc(e?e.link||"":"")}">
+<select onchange="if(this.value)document.getElementById('t3').value=this.value"><option value="">— Quick link: pick a section or one of your pages (fills the link below) —</option>${linkChoices()}</select>
+<input id="t3" placeholder="Link (e.g. #/page/my-page, #/books or https://drive.google.com/...)" value="${esc(e?e.link||"":"")}">
+${colorPicker("tc",e)}
 <button class="btn" onclick="saveTile()">${e?"Update tile":"Add tile"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('tile')">Cancel edit</button>`:""}
 </div>`,
-TILES.map(t=>`<div class="item"><span>${esc(t.title)} <small>${esc(t.desc||"")} ${esc(t.link||"")}</small></span><span>${editBtn("tile",t.id)} ${del("tiles",t.id)}</span></div>`).join(""))}
-async function saveTile(){if(!v("t1"))return alert("Enter a title");const data={title:v("t1"),desc:v("t2"),link:v("t3")};
+TILES.map(t=>`<div class="item"><span>${t.color?`<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(t.color)};margin-right:6px;vertical-align:middle"></span>`:""}${esc(t.title)} <small>${esc(t.desc||"")} ${esc(t.link||"")}</small></span><span>${editBtn("tile",t.id)} ${del("tiles",t.id)}</span></div>`).join(""))}
+async function saveTile(){if(!v("t1"))return alert("Enter a title");const data={title:v("t1"),desc:v("t2"),link:v("t3"),color:cb("tc4")?v("tc5"):""};
 if(EDIT.tile){await db.collection("tiles").doc(EDIT.tile).update(data);EDIT.tile=null}else{await db.collection("tiles").add(data)}
 await loadAll()}
+
+/* ---------- SITE PAGES (hidden from the menu; open them through a tile / button / link) ---------- */
+function slugify(t){return String(t||"").toLowerCase().trim().replace(/[\s_]+/g,"-").replace(/[^\p{L}\p{M}\p{N}-]/gu,"").replace(/-+/g,"-").replace(/^-|-$/g,"")}
+function copyLink(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>alert("Copied: "+t),()=>prompt("Copy this link:",t))}
+PANEL.pages=()=>{const e=PAGES.find(p=>p.id==EDIT.page);
+return panel("Site Pages",`<p class="muted" style="margin-top:0">Write extra pages (notices, guides, FAQs…). They are <b>not</b> shown in the site menu. Visitors reach them only through a link you place: a <b>Homepage Tile</b> (use its quick-link list), a footer button, or a link inside another page.</p>
+<div class="list">
+<input id="pg1" placeholder="Page title" value="${esc(e?e.title:"")}">
+<textarea id="pg2" rows="14" placeholder="Page content…" style="width:100%">${esc(e?e.body||"":"")}</textarea>
+<div class="muted" style="font-size:13px">Formatting: <code>## Heading</code> (own line) · <code>**bold**</code> · <code>*italic*</code> · <code>__underline__</code> · <code>==highlight==</code> · <code>- bullet</code> / <code>1. number</code> lists · <code>[text](https://link)</code> · <code>[text](#/page/other-page)</code> · <code>[coloured]{red}</code> · blank line = new paragraph</div>
+${e?`<div class="muted" style="font-size:13px">Page link: <code>${esc(pageHref(e))}</code> (stays the same even if you rename the page)</div>`:""}
+<button class="btn" onclick="savePage()">${e?"Update page":"Add page"}</button>
+${e?`<button class="btn sm ghost" onclick="cancelEdit('page')">Cancel edit</button>`:""}
+</div>`,
+PAGES.slice().sort((x,y)=>String(x.title).localeCompare(String(y.title))).map(p=>`<div class="item"><span><b>${esc(p.title)}</b> <small>${esc(pageHref(p))}</small></span><span>
+<button class="btn sm ghost" onclick="copyLink('${pageHref(p)}')">Copy link</button>
+<a class="btn sm ghost" href="index.html${pageHref(p)}" target="_blank" rel="noopener">Preview</a>
+${editBtn("page",p.id)} <button class="btn sm ghost" onclick="pageDel('${p.id}')">Delete</button></span></div>`).join(""))}
+async function savePage(){const title=v("pg1");if(!title)return alert("Enter a page title");
+ const e=PAGES.find(p=>p.id==EDIT.page),data={title,body:v("pg2"),updated:Date.now()};
+ if(e){await db.collection("pages").doc(e.id).update(data);EDIT.page=null}
+ else{const base=slugify(title)||"page";let slug=base,n=2;while(PAGES.some(p=>p.slug==slug))slug=base+"-"+(n++);data.slug=slug;await db.collection("pages").add(data)}
+ await loadAll()}
+async function pageDel(id){const p=PAGES.find(x=>x.id==id);if(!p)return;const used=TILES.filter(t=>t.link==pageHref(p)||t.link=="#/page/"+p.slug).length;
+ if(!confirm(used?`Delete page "${p.title}"?\n\n${used} homepage tile(s) link to it and will show "Page not found" until you change their link.`:`Delete page "${p.title}"?`))return;
+ await db.collection("pages").doc(id).delete();await loadAll()}
 
 /* ---------- FOOTER BUTTONS (add / edit / delete; icons: Mobile, WhatsApp, Email, LinkedIn, Facebook, Website, Custom) ---------- */
 /* v7.1: the form is remembered before every re-render, so picking a type no longer jumps back to Mobile */
