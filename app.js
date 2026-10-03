@@ -1,5 +1,6 @@
+/* Allies Learn Together by Fuad Hasan - public site (app.js) v7.3: image-link fixes */
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let SET={heroTitle:"Allies Learn Together",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
+let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
 const FCOLOR={Mobile:"rgba(255,255,255,.16)",WhatsApp:"#145214",Email:"#7a1f1f",LinkedIn:"#0a3d62",Facebook:"#1456a3",Website:"#8a5a2b",Custom:"#3a3a3a"};
@@ -10,6 +11,13 @@ function flinkHref(it){const v=(it.link||"").trim();
  return v}
 function renderFooterLinks(){const el=document.getElementById("footerlinks");if(!el)return;
  el.innerHTML=FLINKS.length?`<div class="footerlinks">${FLINKS.map(it=>`<a class="flink" style="background:${esc(it.color||FCOLOR[it.type]||FCOLOR.Custom)}" href="${esc(flinkHref(it))}" target="_blank" rel="noopener"><span>${FICON[it.type]||FICON.Custom}</span> ${esc(it.label)}</a>`).join("")}</div>`:""}
+/* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
+function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
+ if(/^https?:\/\/(drive|docs)\.google\.com\//i.test(u)){m=u.match(/\/d\/([\w-]{10,})/)||u.match(/[?&]id=([\w-]{10,})/);if(m)return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1600"}
+ if(/^https?:\/\/(www\.)?dropbox\.com\//i.test(u))return u.replace(/^https?:\/\/(www\.)?dropbox\.com/i,"https://dl.dropboxusercontent.com").replace(/([?&])dl=\d/,"$1").replace(/[?&]+$/,"").replace(/\?&/,"?");
+ m=u.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+?)(\?.*)?$/i);if(m)return "https://raw.githubusercontent.com/"+m[1]+"/"+m[2]+"/"+m[3];
+ m=u.match(/^https?:\/\/(?:www\.)?imgur\.com\/(?:gallery\/|a\/)?(\w{5,8})$/i);if(m)return "https://i.imgur.com/"+m[1]+".png";
+ return u}
 const shuffle=a=>a.map(x=>[Math.random(),x]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
 const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
 const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
@@ -19,7 +27,7 @@ async function loadAll(){
  const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
  COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
  LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");FLINKS=await grab("footerlinks");CATS=await grab("categories");LCATS=await grab("linkcats");
- document.getElementById("brandLink").innerHTML=(SET.logoUrl?`<img src="${esc(SET.logoUrl)}" alt="logo" style="height:30px;vertical-align:middle;margin-right:8px;border-radius:6px">`:"")+esc(SET.heroTitle||"Development Allies BD");
+ document.getElementById("brandLink").innerHTML=(SET.logoUrl?`<img src="${esc(imgUrl(SET.logoUrl))}" alt="logo" referrerpolicy="no-referrer" onerror="this.style.display='none'" style="height:30px;width:auto;max-width:140px;object-fit:contain;vertical-align:middle;margin-right:8px;border-radius:6px">`:"")+esc(SET.heroTitle||"Development Allies BD");
  document.title=SET.heroTitle||"Development Allies BD";
  renderFooterLinks();
  route()}
@@ -54,7 +62,7 @@ function md(raw){if(!raw)return"";return raw.split(/\n{2,}/).map(block=>{
  if(lines.length==1&&/^##\s+/.test(lines[0].trim()))return `<h3 style="margin:16px 0 4px">${inline(lines[0].trim().replace(/^##\s+/,""))}</h3>`;
  return `<p>${lines.map(inline).join("<br>")}</p>`}).join("")}
 const V={};
-V.home=()=>`<section class="hero"><h1>${esc(SET.heroTitle)}</h1><p class="lead">${esc(SET.heroText)}</p><div style="display:flex;gap:10px;flex-wrap:wrap">${SET.heroImageUrl?`<div style="width:100%;margin:16px 0"><img src="${esc(SET.heroImageUrl)}" style="max-width:100%;border-radius:16px;display:block"></div>`:""}<a class="btn" href="#/courses">Explore courses</a><a class="btn ghost" href="#/practice">Start practice</a></div></section>
+V.home=()=>`<section class="hero"><h1>${esc(SET.heroTitle)}</h1><p class="lead">${esc(SET.heroText)}</p><div style="display:flex;gap:10px;flex-wrap:wrap">${SET.heroImageUrl?`<div style="width:100%;margin:16px 0"><img src="${esc(imgUrl(SET.heroImageUrl))}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'" style="max-width:100%;border-radius:16px;display:block"></div>`:""}<a class="btn" href="#/courses">Explore courses</a><a class="btn ghost" href="#/practice">Start practice</a></div></section>
 ${SET.aboutText?`<div class="card rich" style="margin:20px 0"><h2>${esc(SET.aboutTitle||"About")}</h2><div style="color:var(--mut)">${md(SET.aboutText)}</div></div>`:""}
 <div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Links",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile" href="${esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}><h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>`;
 V.courses=()=>H("Courses","Pick a course to see lessons and resources.")+`<div class="grid">${COURSES.map(c=>`<a class="card tile"${cstyle(c.color)} href="#/course/${c.id}"><h3>${esc(c.name)}</h3><p>${esc(c.desc||"")}</p></a>`).join("")||"<p class=muted>No courses yet.</p>"}</div>`;
