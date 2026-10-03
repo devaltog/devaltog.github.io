@@ -1,6 +1,6 @@
 /* Allies Learn Together by Fuad Hasan - public site (app.js) v7.4: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
+let SET={heroTitle:"Allies Learn Together",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[],PAGES=[];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
 const FCOLOR={Mobile:"rgba(255,255,255,.16)",WhatsApp:"#145214",Email:"#7a1f1f",LinkedIn:"#0a3d62",Facebook:"#1456a3",Website:"#8a5a2b",Custom:"#3a3a3a"};
