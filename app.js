@@ -1,6 +1,6 @@
-/* Allies Learn Together by Fuad Hasan - public site (app.js) v7.4: image-link fixes + 4 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
+/* Allies Learn Together by Fuad Hasan - public site (app.js) v7.4: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let SET={heroTitle:"Allies Learn Together",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
+let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[],PAGES=[];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
 const FCOLOR={Mobile:"rgba(255,255,255,.16)",WhatsApp:"#145214",Email:"#7a1f1f",LinkedIn:"#0a3d62",Facebook:"#1456a3",Website:"#8a5a2b",Custom:"#3a3a3a"};
@@ -120,14 +120,14 @@ const tagLine=(kind,x)=>tagsOf(x).length?`<div class="tags">${tagsOf(x).map(t=>`
 const bookCard=b=>`<div class="card mini"${cstyle(b.color)}><h3 class="bk">${esc(b.title)}</h3>${tagLine("books",b)}<a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`;
 const siteCard=s=>`<div class="card mini"${cstyle(s.color)}><h3 class="bk">${esc(s.title)}</h3>${s.desc?`<p>${esc(s.desc)}</p>`:""}${tagLine("sites",s)}<a class="btn sm" href="${esc(s.link)}" target="_blank" rel="noopener">Visit</a></div>`;
 const BK={
- books:{label:"Books",noun:"book",desc:"Browse by category, search, or tap a #tag to find similar books.",items:()=>BOOKS,cats:()=>CATS,card:bookCard,preview:4},
- sites:{label:"Links",noun:"link",desc:"Helpful links, by category. Tap a #tag to find similar links.",items:()=>SITES,cats:()=>LCATS,card:siteCard,preview:4}};
+ books:{label:"Books",noun:"book",desc:"Browse by category, search, or tap a #tag to find similar books.",items:()=>BOOKS,cats:()=>CATS,card:bookCard,preview:5},
+ sites:{label:"Links",noun:"link",desc:"Helpful links, by category. Tap a #tag to find similar links.",items:()=>SITES,cats:()=>LCATS,card:siteCard,preview:5}};
 function orderedCats(kind){const items=BK[kind].items(),used=[...new Set(items.map(catName))];
  const names=BK[kind].cats().slice().sort((a,b)=>catOrd(a)-catOrd(b)||String(a.name).localeCompare(String(b.name))).map(c=>c.name).filter(n=>used.includes(n));
  used.filter(n=>!names.includes(n)).forEach(n=>names.push(n));return names}
 function subOrder(kind,cat,list){const doc=BK[kind].cats().find(c=>c.name==cat),defined=(doc&&doc.subs)||[],used=[...new Set(list.map(x=>x.sub).filter(Boolean))];
  const res=defined.filter(s=>used.includes(s));used.filter(s=>!res.includes(s)).forEach(s=>res.push(s));return res}
-/* v7.4: "limit" applies to EACH block: the category's own books (no subcategory) and every subcategory, 4 at a time + See more */
+/* v7.4: "limit" applies to EACH block: the category's own books (no subcategory) and every subcategory, 5 at a time + See more */
 function groupHtml(kind,cat,list,limit){const B=BK[kind];list=list.slice().sort((a,b)=>natSort(a.order,b.order));
  const blocks=[{sub:"",key:"_main",items:list.filter(x=>!x.sub)}].concat(subOrder(kind,cat,list).map(s=>({sub:s,key:s,items:list.filter(x=>x.sub==s)}))).filter(b=>b.items.length);
  let html="",shown=0;
