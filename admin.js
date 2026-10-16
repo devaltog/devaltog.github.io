@@ -1,6 +1,6 @@
 /* Development Allies BD - Trainer dashboard (admin.js) v7.5 (7.5.2 + lesson colors, pop-up notes for courses/lessons/books/links/tiles) */
 const app=document.getElementById("app"),who=document.getElementById("who");
-/* v7.5.2: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
+/* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
 function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
  if(/^https?:\/\/(drive|docs)\.google\.com\//i.test(u)){m=u.match(/\/d\/([\w-]{10,})/)||u.match(/[?&]id=([\w-]{10,})/);if(m)return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1600"}
  if(/^https?:\/\/(www\.)?dropbox\.com\//i.test(u))return u.replace(/^https?:\/\/(www\.)?dropbox\.com/i,"https://dl.dropboxusercontent.com").replace(/([?&])dl=\d/,"$1").replace(/[?&]+$/,"").replace(/\?&/,"?");
