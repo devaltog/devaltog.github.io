@@ -1,6 +1,6 @@
-/* ALT - Trainer dashboard (admin.js) v7.4 (7.3 + site pages, colored tiles with quick links) */
+/* Development Allies BD - Trainer dashboard (admin.js) v7.5 (7.5.2 + lesson colors, pop-up notes for courses/lessons/books/links/tiles) */
 const app=document.getElementById("app"),who=document.getElementById("who");
-/* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
+/* v7.5.2: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
 function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
  if(/^https?:\/\/(drive|docs)\.google\.com\//i.test(u)){m=u.match(/\/d\/([\w-]{10,})/)||u.match(/[?&]id=([\w-]{10,})/);if(m)return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1600"}
  if(/^https?:\/\/(www\.)?dropbox\.com\//i.test(u))return u.replace(/^https?:\/\/(www\.)?dropbox\.com/i,"https://dl.dropboxusercontent.com").replace(/([?&])dl=\d/,"$1").replace(/[?&]+$/,"").replace(/\?&/,"?");
@@ -65,13 +65,15 @@ return panel("Courses",`<div class="list">
 <input id="c2" placeholder="Short description" value="${esc(e?e.desc||"":"")}">
 <input id="c3" placeholder="Order (e.g. 1, 2, A, B — controls the sequence shown)" value="${esc(e?e.order||"":"")}">
 ${colorPicker("c",e)}
+${noteBox("note_course",e)}
 <button class="btn" onclick="saveCourse()">${e?"Update course":"Add course"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('course')">Cancel edit</button>`:""}
 </div>`,
 sorted.map(c=>`<div class="item"><span>${esc(c.order?"["+c.order+"] ":"")}${esc(c.name)} <small>${esc(c.desc||"")}</small></span><span>${editBtn("course",c.id)} ${del("courses",c.id)}</span></div>`).join(""))}
+function noteBox(id,e){return `<textarea id="${id}" rows="2" style="width:100%" placeholder="Optional pop-up note / short instruction (a small ⓘ button appears on the card; visitors tap it to read this)">${esc(e&&e.note?e.note:"")}</textarea>`}
 function colorPicker(p,e){const has=!!(e&&e.color);return `<label><input type="checkbox" id="${p}4" ${has?"checked":""} onchange="document.getElementById('${p}5').disabled=!this.checked"> Use a custom card color (default: site theme)</label> <input type="color" id="${p}5" value="${e&&e.color?esc(e.color):"#2b6cb0"}" ${has?"":"disabled"}>`}
 function startEdit(kind,id){EDIT[kind]=id;if(kind=="flink")window.__fForm=null;renderShell(window.__sec);window.scrollTo(0,0)}
-async function saveCourse(){if(!v("c1"))return alert("Enter a course name");const data={name:v("c1"),desc:v("c2"),order:v("c3"),color:cb("c4")?v("c5"):""};
+async function saveCourse(){if(!v("c1"))return alert("Enter a course name");const data={name:v("c1"),desc:v("c2"),order:v("c3"),color:cb("c4")?v("c5"):"",note:v("note_course")};
 if(EDIT.course){await db.collection("courses").doc(EDIT.course).update(data);EDIT.course=null}else{await db.collection("courses").add(Object.assign({hidden:false},data))}
 await loadAll()}
 
@@ -84,6 +86,8 @@ return panel("Lessons",`<div class="list">
 <input id="l3" placeholder="Video link (YouTube, optional)" value="${esc(e?e.videoUrl||"":"")}">
 <input id="l4" placeholder="PDF / Google Drive link (optional)" value="${esc(e?e.pdfUrl||"":"")}">
 <input id="l5" placeholder="Order (e.g. 1, 2, A, B — controls the sequence shown)" value="${esc(e?e.order||"":"")}">
+${colorPicker("lc",e)}
+${noteBox("note_lesson",e)}
 <button class="btn" onclick="saveLesson()">${e?"Update lesson":"Add lesson"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('lesson')">Cancel edit</button>`:""}
 </div>
@@ -119,7 +123,7 @@ await db.collection("lessons").doc(lid).update({materials:mats});await loadAll()
 async function rmMaterial(lid,i){const lesson=LESSONS.find(l=>l.id==lid),mats=(lesson.materials||[]).slice();mats.splice(i,1);
 await db.collection("lessons").doc(lid).update({materials:mats});await loadAll()}
 async function saveLesson(){if(!COURSES.length)return alert("Add a course first");if(!v("l2"))return alert("Enter a lesson title");
-const data={courseId:v("l1"),title:v("l2"),videoUrl:v("l3"),pdfUrl:v("l4"),order:v("l5")};
+const data={courseId:v("l1"),title:v("l2"),videoUrl:v("l3"),pdfUrl:v("l4"),order:v("l5"),color:cb("lc4")?v("lc5"):"",note:v("note_lesson")};
 if(EDIT.lesson){await db.collection("lessons").doc(EDIT.lesson).update(data);EDIT.lesson=null}else{await db.collection("lessons").add(data)}
 await loadAll()}
 
@@ -330,11 +334,12 @@ return panel("Books",`<div class="list">
 ${tagHints("book","b5")}
 <input id="b4" placeholder="Order within category (e.g. 1, 2, A, B)" value="${esc(e?e.order||"":"")}">
 ${colorPicker("bc",e)}
+${noteBox("note_book",e)}
 <button class="btn" onclick="saveBook()">${e?"Update book":"Add book"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('book')">Cancel edit</button>`:""}
 </div>`,
 kfWrap("book"))}
-async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),sub:v("b1s"),title:v("b2"),link:v("b3"),order:v("b4"),tags:parseTags(v("b5")),color:cb("bc4")?v("bc5"):""};
+async function saveBook(){if(!v("b2"))return alert("Enter a title");const data={cat:v("b1"),sub:v("b1s"),title:v("b2"),link:v("b3"),order:v("b4"),tags:parseTags(v("b5")),color:cb("bc4")?v("bc5"):"",note:v("note_book")};
 if(EDIT.book){await db.collection("books").doc(EDIT.book).update(data);EDIT.book=null}else{await db.collection("books").add(data)}
 await loadAll()}
 
@@ -352,11 +357,12 @@ return panel("Links",`<div class="list">
 ${tagHints("link","w5")}
 <input id="w4" placeholder="Order within category (e.g. 1, 2, A, B)" value="${esc(e?e.order||"":"")}">
 ${colorPicker("wc",e)}
+${noteBox("note_site",e)}
 <button class="btn" onclick="saveSite()">${e?"Update link":"Add link"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('site')">Cancel edit</button>`:""}
 </div>`,
 kfWrap("link"))}
-async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),sub:v("w0s"),title:v("w1"),desc:v("w2"),link:v("w3"),order:v("w4"),tags:parseTags(v("w5")),color:cb("wc4")?v("wc5"):""};
+async function saveSite(){if(!v("w1"))return alert("Enter a title");const data={cat:v("w0"),sub:v("w0s"),title:v("w1"),desc:v("w2"),link:v("w3"),order:v("w4"),tags:parseTags(v("w5")),color:cb("wc4")?v("wc5"):"",note:v("note_site")};
 if(EDIT.site){await db.collection("sites").doc(EDIT.site).update(data);EDIT.site=null}else{await db.collection("sites").add(data)}
 await loadAll()}
 
@@ -372,11 +378,12 @@ return panel("Homepage Tiles",`<p class="muted" style="margin-top:0">Extra cards
 <select onchange="if(this.value)document.getElementById('t3').value=this.value"><option value="">— Quick link: pick a section or one of your pages (fills the link below) —</option>${linkChoices()}</select>
 <input id="t3" placeholder="Link (e.g. #/page/my-page, #/books or https://drive.google.com/...)" value="${esc(e?e.link||"":"")}">
 ${colorPicker("tc",e)}
+${noteBox("note_tile",e)}
 <button class="btn" onclick="saveTile()">${e?"Update tile":"Add tile"}</button>
 ${e?`<button class="btn sm ghost" onclick="cancelEdit('tile')">Cancel edit</button>`:""}
 </div>`,
 TILES.map(t=>`<div class="item"><span>${t.color?`<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(t.color)};margin-right:6px;vertical-align:middle"></span>`:""}${esc(t.title)} <small>${esc(t.desc||"")} ${esc(t.link||"")}</small></span><span>${editBtn("tile",t.id)} ${del("tiles",t.id)}</span></div>`).join(""))}
-async function saveTile(){if(!v("t1"))return alert("Enter a title");const data={title:v("t1"),desc:v("t2"),link:v("t3"),color:cb("tc4")?v("tc5"):""};
+async function saveTile(){if(!v("t1"))return alert("Enter a title");const data={title:v("t1"),desc:v("t2"),link:v("t3"),color:cb("tc4")?v("tc5"):"",note:v("note_tile")};
 if(EDIT.tile){await db.collection("tiles").doc(EDIT.tile).update(data);EDIT.tile=null}else{await db.collection("tiles").add(data)}
 await loadAll()}
 
