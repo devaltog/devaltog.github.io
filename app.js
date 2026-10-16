@@ -1,6 +1,6 @@
-/* Allies Learn Together by S M Fuad Hasan, COntact: 01797220168 - public site (app.js) v7.4: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
+/* Allies Learn Together by S M Fuad Hasan, COntact: 01797220168 - public site (app.js) v7.5.2: pop-up notes, lesson colors, practice shows only courses/lessons with questions, search for Courses + Practice; v7.5.2: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let SET={heroTitle:"Allies Learn Together",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
+let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[],PAGES=[];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
 const FCOLOR={Mobile:"rgba(255,255,255,.16)",WhatsApp:"#145214",Email:"#7a1f1f",LinkedIn:"#0a3d62",Facebook:"#1456a3",Website:"#8a5a2b",Custom:"#3a3a3a"};
@@ -37,6 +37,18 @@ function embed(u){if(!u)return"";if(u.includes("youtu")){const id=(u.match(/(?:v
 const H=(t,s)=>`<div><h2>${esc(t)}</h2><p class="muted">${esc(s)}</p></div>`;
 function textColorFor(hex){const h=(hex||"").replace("#",""),r=parseInt(h.substr(0,2),16)||0,g=parseInt(h.substr(2,2),16)||0,b=parseInt(h.substr(4,2),16)||0;return((0.299*r+0.587*g+0.114*b)/255)>0.55?"#1a1a1a":"#ffffff"}
 function cstyle(c){return c?` style="background:${esc(c)};color:${textColorFor(c)}"`:""}
+/* v7.5: optional pop-up note (small "i" button on a card -> short instruction/comment window) */
+const nb=(kind,x)=>x&&x.note?`<span class="infobtn" role="button" tabindex="0" title="Read note" onclick="showNote('${kind}','${x.id}',event)" onkeydown="if(event.key=='Enter')showNote('${kind}','${x.id}',event)">i</span>`:"";
+function showNote(kind,id,ev){if(ev){ev.preventDefault();ev.stopPropagation()}
+ const src={courses:COURSES,lessons:LESSONS,books:BOOKS,sites:SITES,tiles:TILES}[kind]||[],x=src.find(i=>i.id==id);if(!x)return;closeNote();
+ const d=document.createElement("div");d.className="modal-bg";d.id="notebg";d.onclick=e=>{if(e.target===d)closeNote()};
+ d.innerHTML=`<div class="modal rich" role="dialog" aria-modal="true"><h3>${esc(x.name||x.title)}</h3><div>${md(x.note)}</div><p style="text-align:right;margin:14px 0 0"><button class="btn sm" onclick="closeNote()">Got it</button></p></div>`;document.body.appendChild(d)}
+function closeNote(){const d=document.getElementById("notebg");if(d)d.remove()}
+document.addEventListener("keydown",e=>{if(e.key=="Escape")closeNote()});
+const tok=s=>String(s||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
+const hasQ=lid=>QUESTIONS.some(q=>q.lessonId==lid);
+const practiceLessons=cid=>LESSONS.filter(l=>l.courseId==cid&&hasQ(l.id));
+const practiceCourses=()=>COURSES.filter(c=>practiceLessons(c.id).length);
 function inline(s){let t=esc(s);
 t=t.replace(/\|\|(.+?)\|\|/g,'<span class="spoiler" onclick="this.classList.toggle(\'rv\')" title="Click to reveal">$1</span>');
 t=t.replace(/`([^`]+?)`/g,"<code>$1</code>");
@@ -65,19 +77,35 @@ function md(raw){if(!raw)return"";return raw.split(/\n{2,}/).map(block=>{
 const V={};
 V.home=()=>`<section class="hero"><h1>${esc(SET.heroTitle)}</h1><p class="lead">${esc(SET.heroText)}</p><div style="display:flex;gap:10px;flex-wrap:wrap">${SET.heroImageUrl?`<div style="width:100%;margin:16px 0"><img src="${esc(imgUrl(SET.heroImageUrl))}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'" style="max-width:100%;border-radius:16px;display:block"></div>`:""}<a class="btn" href="#/courses">Explore courses</a><a class="btn ghost" href="#/practice">Start practice</a></div></section>
 ${SET.aboutText?`<div class="card rich" style="margin:20px 0"><h2>${esc(SET.aboutTitle||"About")}</h2><div style="color:var(--mut)">${md(SET.aboutText)}</div></div>`:""}
-<div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Links",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile"${cstyle(t.color)} href="${esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}><h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>`;
-V.courses=()=>H("Courses","Pick a course to see lessons and resources.")+`<div class="grid">${COURSES.map(c=>`<a class="card tile"${cstyle(c.color)} href="#/course/${c.id}"><h3>${esc(c.name)}</h3><p>${esc(c.desc||"")}</p></a>`).join("")||"<p class=muted>No courses yet.</p>"}</div>`;
+<div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Links",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile"${cstyle(t.color)} href="${esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}>${nb("tiles",t)}<h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>`;
+V.courses=()=>H("Courses","Pick a course to see lessons and resources.")+`<input class="search" placeholder="Search courses or lessons…" value="${esc(SQ.courses)}" oninput="cSearch(this.value)"><div id="cresults">${courseResults()}</div>`;
+function cSearch(val){SQ.courses=val;const el=document.getElementById("cresults");if(el)el.innerHTML=courseResults()}
+function courseResults(){const toks=tok(SQ.courses);
+ const out=COURSES.filter(c=>{if(!toks.length)return true;const h=(c.name+" "+(c.desc||"")+" "+LESSONS.filter(l=>l.courseId==c.id).map(l=>l.title).join(" ")).toLowerCase();return toks.every(t=>h.includes(t))});
+ if(!out.length)return `<p class=muted>${COURSES.length?"Nothing matches your search.":"No courses yet."}</p>`;
+ return `<div class="grid">${out.map(c=>{const m=toks.length?LESSONS.filter(l=>l.courseId==c.id&&toks.some(t=>String(l.title).toLowerCase().includes(t))).slice(0,3):[];
+  return `<a class="card tile"${cstyle(c.color)} href="#/course/${c.id}">${nb("courses",c)}<h3>${esc(c.name)}</h3><p>${esc(c.desc||"")}</p>${m.length?`<small>Lesson: ${m.map(l=>esc(l.title)).join(", ")}</small>`:""}</a>`}).join("")}</div>`}
 V.course=id=>{const c=COURSES.find(x=>x.id==id);if(!c)return V.courses();const ls=LESSONS.filter(l=>l.courseId==id);
-return H(c.name,c.desc||"")+`<div class="list">${ls.map(l=>`<div class="card"><h3>${esc(l.title)}</h3>${embed(l.videoUrl)}${l.pdfUrl?`<p><a class="btn sm ghost" href="${esc(l.pdfUrl)}" target="_blank" rel="noopener">Open PDF / file</a></p>`:""}${(l.materials||[]).length?`<div class="list" style="margin-top:8px">${l.materials.map(m=>`<div class="item"><span>${esc(m.type)}: ${esc(m.title)}</span><a class="btn sm ghost" href="${esc(m.link)}" target="_blank" rel="noopener">Open</a></div>`).join("")}</div>`:""}<p><a class="btn sm" href="#/practice/lesson/${l.id}">Practise this lesson</a></p></div>`).join("")||"<p class=muted>No lessons yet.</p>"}</div>`};
+return H(c.name,c.desc||"")+`<div class="list">${ls.map(l=>`<div class="card"${cstyle(l.color)}>${nb("lessons",l)}<h3>${esc(l.title)}</h3>${embed(l.videoUrl)}${l.pdfUrl?`<p><a class="btn sm ghost" href="${esc(l.pdfUrl)}" target="_blank" rel="noopener">Open PDF / file</a></p>`:""}${(l.materials||[]).length?`<div class="list" style="margin-top:8px">${l.materials.map(m=>`<div class="item"><span>${esc(m.type)}: ${esc(m.title)}</span><a class="btn sm ghost" href="${esc(m.link)}" target="_blank" rel="noopener">Open</a></div>`).join("")}</div>`:""}${hasQ(l.id)?`<p><a class="btn sm" href="#/practice/lesson/${l.id}">Practise this lesson</a></p>`:""}</div>`).join("")||"<p class=muted>No lessons yet.</p>"}</div>`};
 
 /* ---------------- PRACTICE: course -> lesson -> type -> set -> quiz ---------------- */
 const TY={MCQ:"Choose the correct answer.",Written:"Type a short answer.",Matching:"Match each item."};
+/* v7.5: Practice lists ONLY courses / lessons / types that actually have questions */
+const pLessonTile=(l,showCourse)=>`<a class="card tile"${cstyle(l.color)} href="#/practice/lesson/${l.id}">${nb("lessons",l)}<h3>${esc(l.title)}</h3><p>${QUESTIONS.filter(q=>q.lessonId==l.id).length} questions</p>${showCourse?`<small>${esc(cname(l.courseId))}</small>`:""}</a>`;
+const pCourseTile=c=>{const ls=practiceLessons(c.id);return `<a class="card tile"${cstyle(c.color)} href="#/practice/course/${c.id}">${nb("courses",c)}<h3>${esc(c.name)}</h3><p>${ls.length} lesson${ls.length==1?"":"s"} · ${ls.reduce((n,l)=>n+QUESTIONS.filter(q=>q.lessonId==l.id).length,0)} questions</p></a>`};
+function pSearch(val){SQ.practice=val;const el=document.getElementById("presults");if(el)el.innerHTML=practiceResults()}
+function practiceResults(){const toks=tok(SQ.practice),cs=practiceCourses();
+ if(!cs.length)return `<p class=muted>No practice questions have been added yet.</p>`;
+ if(!toks.length)return `<div class="grid">${cs.map(pCourseTile).join("")}</div>`;
+ const cm=cs.filter(c=>{const h=(c.name+" "+(c.desc||"")).toLowerCase();return toks.every(t=>h.includes(t))});
+ const lm=LESSONS.filter(l=>cs.some(c=>c.id==l.courseId)&&hasQ(l.id)&&toks.every(t=>String(l.title).toLowerCase().includes(t)));
+ return (cm.length?`<h3 class="grp">Courses</h3><div class="grid">${cm.map(pCourseTile).join("")}</div>`:"")+(lm.length?`<h3 class="grp">Lessons</h3><div class="grid">${lm.map(l=>pLessonTile(l,true)).join("")}</div>`:"")||`<p class=muted>Nothing matches your search.</p>`}
 V.practice=parts=>{parts=parts||[];
- if(!parts.length)return H("Practice","Pick a course to begin.")+`<div class="grid">${COURSES.map(c=>`<a class="card tile" href="#/practice/course/${c.id}"><h3>${esc(c.name)}</h3><p>${LESSONS.filter(l=>l.courseId==c.id).length} lessons</p></a>`).join("")||"<p class=muted>No courses yet.</p>"}</div>`;
- if(parts[0]=="course"){const cid=parts[1],ls=LESSONS.filter(l=>l.courseId==cid);
-  return H(cname(cid),"Pick a lesson.")+`<div class="grid">${ls.map(l=>`<a class="card tile" href="#/practice/lesson/${l.id}"><h3>${esc(l.title)}</h3><p>${QUESTIONS.filter(q=>q.lessonId==l.id).length} questions</p></a>`).join("")||"<p class=muted>No lessons in this course yet.</p>"}</div>`}
+ if(!parts.length)return H("Practice","Pick a course to begin.")+`<input class="search" placeholder="Search practice courses or lessons…" value="${esc(SQ.practice)}" oninput="pSearch(this.value)"><div id="presults">${practiceResults()}</div>`;
+ if(parts[0]=="course"){const cid=parts[1],ls=practiceLessons(cid);
+  return H(cname(cid),"Pick a lesson.")+`<div class="grid">${ls.map(l=>pLessonTile(l,false)).join("")||"<p class=muted>No practice questions have been added for this course yet.</p>"}</div>`}
  if(parts[0]=="lesson"&&!parts[2]){const lid=parts[1];
-  return H(lname(lid),"Choose a question type.")+`<div class="grid">${Object.keys(TY).map(t=>{const n=QUESTIONS.filter(q=>q.lessonId==lid&&q.type==t).length;return `<a class="card tile" href="#/practice/lesson/${lid}/${t}"><h3>${t}</h3><p>${TY[t]}</p><small>${n} questions</small></a>`}).join("")}</div>`}
+  return H(lname(lid),"Choose a question type.")+`<div class="grid">${Object.keys(TY).filter(t=>QUESTIONS.some(q=>q.lessonId==lid&&q.type==t)).map(t=>{const n=QUESTIONS.filter(q=>q.lessonId==lid&&q.type==t).length;return `<a class="card tile" href="#/practice/lesson/${lid}/${t}"><h3>${t}</h3><p>${TY[t]}</p><small>${n} questions</small></a>`}).join("")||"<p class=muted>No questions in this lesson yet.</p>"}</div>`}
  if(parts[0]=="lesson"&&parts[2]){const lid=parts[1],t=parts[2],qs=QUESTIONS.filter(q=>q.lessonId==lid&&q.type==t);
   const sets=[...new Set(qs.map(q=>q.setNo||1))].sort((a,b)=>a-b);
   return H(t+" — "+lname(lid),"Choose a set to begin. Questions are shuffled each time.")+`<div class="grid">${sets.map(s=>`<a class="card tile" href="javascript:startSet('${lid}','${t}',${s})"><h3>Set ${s}</h3><p>${qs.filter(q=>(q.setNo||1)==s).length} questions</p></a>`).join("")||"<p class=muted>No questions in this lesson/type yet.</p>"}</div>`}
@@ -112,13 +140,13 @@ function renderQuiz(){if(!QUIZ)return;
  app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card"><h3>${esc(q.q)}</h3>${qInput(q)}</div><button class="btn" onclick="${q.type=="Written"?"checkWritten()":"quizNext()"}">${q.type=="Written"?"Check answer":(isLast?"Finish set":"Next question")}</button>`}
 
 /* ---------------- BOOKS + LINKS: categories (ordered), subcategories, #tags, search ---------------- */
-const SQ={books:"",sites:""};
+const SQ={books:"",sites:"",courses:"",practice:""};
 const tagsOf=x=>Array.isArray(x.tags)?x.tags:[];
 const catName=x=>x.cat||"General";
 const catOrd=x=>(x.order===undefined||x.order===null||x.order==="")?1e9:Number(x.order);
 const tagLine=(kind,x)=>tagsOf(x).length?`<div class="tags">${tagsOf(x).map(t=>`<a class="tagchip" href="#/${kind}/tag/${encodeURIComponent(t)}">#${esc(t)}</a>`).join("")}</div>`:"";
-const bookCard=b=>`<div class="card mini"${cstyle(b.color)}><h3 class="bk">${esc(b.title)}</h3>${tagLine("books",b)}<a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`;
-const siteCard=s=>`<div class="card mini"${cstyle(s.color)}><h3 class="bk">${esc(s.title)}</h3>${s.desc?`<p>${esc(s.desc)}</p>`:""}${tagLine("sites",s)}<a class="btn sm" href="${esc(s.link)}" target="_blank" rel="noopener">Visit</a></div>`;
+const bookCard=b=>`<div class="card mini"${cstyle(b.color)}>${nb("books",b)}<h3 class="bk">${esc(b.title)}</h3>${tagLine("books",b)}<a class="btn sm" href="${esc(b.link)}" target="_blank" rel="noopener">Open</a></div>`;
+const siteCard=s=>`<div class="card mini"${cstyle(s.color)}>${nb("sites",s)}<h3 class="bk">${esc(s.title)}</h3>${s.desc?`<p>${esc(s.desc)}</p>`:""}${tagLine("sites",s)}<a class="btn sm" href="${esc(s.link)}" target="_blank" rel="noopener">Visit</a></div>`;
 const BK={
  books:{label:"Books",noun:"book",desc:"Browse by category, search, or tap a #tag to find similar books.",items:()=>BOOKS,cats:()=>CATS,card:bookCard,preview:5},
  sites:{label:"Links",noun:"link",desc:"Helpful links, by category. Tap a #tag to find similar links.",items:()=>SITES,cats:()=>LCATS,card:siteCard,preview:5}};
@@ -164,7 +192,7 @@ V.page=slug=>{const p=PAGES.find(x=>x.slug==slug);
  return `<h2>${esc(p.title)}</h2><div class="card rich pagebody">${md(p.body||"")||"<p class=muted>This page is empty.</p>"}</div><p><a class="btn ghost" href="#/home">← Back to Home</a></p>`};
 function go(h){location.hash=h}
 function route(){const parts=location.hash.slice(2).split("/").map(decodeURIComponent),p=parts[0]||"home";
- QUIZ=null;SQ.books=SQ.sites="";
+ QUIZ=null;SQ.books=SQ.sites=SQ.courses=SQ.practice="";
  app.innerHTML=p=="practice"?V.practice(parts.slice(1)):(V[p]||V.home)(parts[1],parts[2],parts[3]);
  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.getAttribute("href")=="#/"+(p=="course"?"courses":p)))}
 addEventListener("hashchange",()=>{route();scrollTo(0,0)});
