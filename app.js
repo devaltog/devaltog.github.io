@@ -1,4 +1,4 @@
-/* Allies Learn Together by S M Fuad Hasan, COntact: 01797220168 - public site (app.js) v7.5.2: pop-up notes, lesson colors, practice shows only courses/lessons with questions, search for Courses + Practice; v7.5.2: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
+/* Allies Learn Together by S M Fuad Hasan - public site (app.js) v7.5.2: Practice "Next question" fix for written questions + Check answer / Next question buttons; v7.5.3: question comments; v7.5: pop-up notes, lesson colors, practice shows only courses/lessons with questions, search for Courses + Practice; v7.5.2: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
 let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[],PAGES=[];
@@ -40,9 +40,9 @@ function cstyle(c){return c?` style="background:${esc(c)};color:${textColorFor(c
 /* v7.5: optional pop-up note (small "i" button on a card -> short instruction/comment window) */
 const nb=(kind,x)=>x&&x.note?`<span class="infobtn" role="button" tabindex="0" title="Read note" onclick="showNote('${kind}','${x.id}',event)" onkeydown="if(event.key=='Enter')showNote('${kind}','${x.id}',event)">i</span>`:"";
 function showNote(kind,id,ev){if(ev){ev.preventDefault();ev.stopPropagation()}
- const src={courses:COURSES,lessons:LESSONS,books:BOOKS,sites:SITES,tiles:TILES}[kind]||[],x=src.find(i=>i.id==id);if(!x)return;closeNote();
+ const src={courses:COURSES,lessons:LESSONS,books:BOOKS,sites:SITES,tiles:TILES,questions:QUESTIONS}[kind]||[],x=src.find(i=>i.id==id);if(!x)return;closeNote();
  const d=document.createElement("div");d.className="modal-bg";d.id="notebg";d.onclick=e=>{if(e.target===d)closeNote()};
- d.innerHTML=`<div class="modal rich" role="dialog" aria-modal="true"><h3>${esc(x.name||x.title)}</h3><div>${md(x.note)}</div><p style="text-align:right;margin:14px 0 0"><button class="btn sm" onclick="closeNote()">Got it</button></p></div>`;document.body.appendChild(d)}
+ d.innerHTML=`<div class="modal rich" role="dialog" aria-modal="true"><h3>${esc(x.name||x.title||"Comment")}</h3><div>${md(x.note)}</div><p style="text-align:right;margin:14px 0 0"><button class="btn sm" onclick="closeNote()">Got it</button></p></div>`;document.body.appendChild(d)}
 function closeNote(){const d=document.getElementById("notebg");if(d)d.remove()}
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeNote()});
 const tok=s=>String(s||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -120,15 +120,15 @@ function qInput(q){if(q.type=="MCQ")return (q.opts||[]).map((o,j)=>`<label class
  const R=shuffle((q.opts||[]).map(p=>p.split("|")[1]));
  return (q.opts||[]).map((p,j)=>`<div style="display:flex;justify-content:space-between;gap:10px;margin:6px 0"><span>${esc(p.split("|")[0])}</span><select id="qam_${j}"><option value="">Choose</option>${R.map(r=>`<option>${esc(r)}</option>`).join("")}</select></div>`).join("")}
 function gradeCurrent(q){if(q.type=="MCQ"){const c=document.querySelector('[name=qa]:checked');const ok=c&&c.value==q.ans?1:0;return{ok,n:1,your:c?c.value:"(no answer)",correct:q.ans}}
- if(q.type=="Written"){const a=(document.getElementById("qaw").value||"").toLowerCase(),k=(q.ans||"").toLowerCase().split(",").map(x=>x.trim()).filter(Boolean);const ok=k.length&&k.filter(x=>a.includes(x)).length>=Math.ceil(k.length/2)?1:0;return{ok,n:1,your:document.getElementById("qaw").value||"(no answer)",correct:q.ans}}
+ if(q.type=="Written"){const wEl=document.getElementById("qaw"),wVal=wEl?wEl.value:"";const a=(wVal||"").toLowerCase(),k=(q.ans||"").toLowerCase().split(",").map(x=>x.trim()).filter(Boolean);const ok=k.length&&k.filter(x=>a.includes(x)).length>=Math.ceil(k.length/2)?1:0;return{ok,n:1,your:wVal||"(no answer)",correct:q.ans}}
  let ok=0;const n=(q.opts||[]).length;const pairs=[];(q.opts||[]).forEach((p,j)=>{const[left,right]=p.split("|"),sel=(document.getElementById("qam_"+j)||{}).value||"";pairs.push({left,your:sel||"—",correct:right,ok:sel==right});if(sel==right)ok++});
  return{ok,n,pairs}}
-function quizNext(){const q=QUIZ.qs[QUIZ.idx];QUIZ.results[QUIZ.idx]=gradeCurrent(q);QUIZ.idx++;QUIZ.revealed=false;renderQuiz()}
+function quizNext(){const q=QUIZ.qs[QUIZ.idx];if(!(q.type=="Written"&&QUIZ.revealed))QUIZ.results[QUIZ.idx]=gradeCurrent(q);QUIZ.idx++;QUIZ.revealed=false;renderQuiz()}
 function checkWritten(){const q=QUIZ.qs[QUIZ.idx];QUIZ.results[QUIZ.idx]=gradeCurrent(q);QUIZ.revealed=true;renderQuiz()}
 function reviewItem(q,r,i){
- if(q.type=="Matching")return `<div class="card"><b>Q${i+1}. ${esc(q.q)}</b> <small class="muted">${r.ok}/${r.n} correct</small><table class="review-table"><tr><th>Item</th><th>Your match</th><th>Correct match</th></tr>${r.pairs.map(p=>`<tr><td>${esc(p.left)}</td><td class="${p.ok?"ok":"bad"}">${esc(p.your)}</td><td>${p.ok?"✓":esc(p.correct)}</td></tr>`).join("")}</table></div>`;
+ if(q.type=="Matching")return `<div class="card"><b>Q${i+1}. ${esc(q.q)}</b> <small class="muted">${r.ok}/${r.n} correct</small>${q.note?`<br><small class="muted">💬 ${esc(q.note)}</small>`:""}<table class="review-table"><tr><th>Item</th><th>Your match</th><th>Correct match</th></tr>${r.pairs.map(p=>`<tr><td>${esc(p.left)}</td><td class="${p.ok?"ok":"bad"}">${esc(p.your)}</td><td>${p.ok?"✓":esc(p.correct)}</td></tr>`).join("")}</table></div>`;
  const label=q.type=="Written"?"Sample answer":"Correct answer";
- return `<div class="item ${r.ok==r.n?"good":"bad"}"><span><b>Q${i+1}.</b> ${esc(q.q)}<br><small>Your answer: ${esc(r.your)}</small></span>${r.ok<r.n?`<small>${label}: ${esc(r.correct)}</small>`:""}</div>`}
+ return `<div class="item ${r.ok==r.n?"good":"bad"}"><span><b>Q${i+1}.</b> ${esc(q.q)}<br><small>Your answer: ${esc(r.your)}</small>${q.note?`<br><small class="muted">💬 ${esc(q.note)}</small>`:""}</span>${r.ok<r.n?`<small>${label}: ${esc(r.correct)}</small>`:""}</div>`}
 function renderQuiz(){if(!QUIZ)return;
  if(QUIZ.idx>=QUIZ.qs.length){let sc=0,tot=0,fb="";QUIZ.results.forEach((r,i)=>{sc+=r.ok;tot+=r.n;fb+=reviewItem(QUIZ.qs[i],r,i)});
   const p=Math.round(sc/tot*100),g=p>=70;
@@ -136,8 +136,8 @@ function renderQuiz(){if(!QUIZ)return;
   QUIZ=null;return}
  const q=QUIZ.qs[QUIZ.idx],isLast=QUIZ.idx+1==QUIZ.qs.length;
  if(q.type=="Written"&&QUIZ.revealed){const r=QUIZ.results[QUIZ.idx];
-  app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card"><h3>${esc(q.q)}</h3><p><small class="muted">Your answer:</small><br>${esc(r.your)}</p><div class="item ${r.ok?"good":"bad"}"><span>Sample answer: ${esc(r.correct)}</span></div></div><button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button>`;return}
- app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card"><h3>${esc(q.q)}</h3>${qInput(q)}</div><button class="btn" onclick="${q.type=="Written"?"checkWritten()":"quizNext()"}">${q.type=="Written"?"Check answer":(isLast?"Finish set":"Next question")}</button>`}
+  app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card">${nb("questions",q)}<h3>${esc(q.q)}</h3><p><small class="muted">Your answer:</small><br>${esc(r.your)}</p><div class="item ${r.ok?"good":"bad"}"><span>Sample answer: ${esc(r.correct)}</span></div></div><p class="qbtns"><button class="btn ghost" disabled>Check answer</button> <button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button></p>`;return}
+ app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card">${nb("questions",q)}<h3>${esc(q.q)}</h3>${qInput(q)}</div>${q.type=="Written"?`<p class="qbtns"><button class="btn ghost" onclick="checkWritten()">Check answer</button> <button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button></p>`:`<button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button>`}`}
 
 /* ---------------- BOOKS + LINKS: categories (ordered), subcategories, #tags, search ---------------- */
 const SQ={books:"",sites:"",courses:"",practice:""};
