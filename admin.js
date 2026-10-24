@@ -1,4 +1,4 @@
-/* Development Allies BD - Trainer dashboard (admin.js) v7.5 (7.5.2 + lesson colors, pop-up notes for courses/lessons/books/links/tiles) */
+/* Development Allies BD - Trainer dashboard (admin.js) v8.0 (Feed) / v7.5.6 (question comments) / v7.5 (7.4 + lesson colors, pop-up notes for courses/lessons/books/links/tiles) */
 const app=document.getElementById("app"),who=document.getElementById("who");
 /* v7.3: turns normal share links (Google Drive, Dropbox, GitHub, Imgur page) into direct image links */
 function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
@@ -10,10 +10,10 @@ function imgUrl(u){u=String(u||"").trim();if(!u)return"";let m;
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const v=id=>(document.getElementById(id)||{value:""}).value.trim();
 const cb=id=>!!(document.getElementById(id)||{}).checked;
-let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],FLINKS=[],PAGES=[],SET={};
+let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],CATS=[],LCATS=[],TILES=[],FLINKS=[],PAGES=[],FEED=[],SET={};
 const FTYPES=["Mobile","WhatsApp","Email","LinkedIn","Facebook","Website","Custom"];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
-let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null,catbook:null,catlink:null,page:null};
+let EDIT={course:null,lesson:null,question:null,book:null,site:null,tile:null,flink:null,catbook:null,catlink:null,page:null,feed:null};
 let mopts=[["",""],["",""],["",""]]; // matching rows while building a question
 const orderKey=o=>(o&&String(o).trim())?String(o).trim():"\uFFFF";
 const natSort=(a,b)=>orderKey(a).localeCompare(orderKey(b),undefined,{numeric:true,sensitivity:"base"});
@@ -24,10 +24,10 @@ function doLogin(){auth.signInWithEmailAndPassword(v("em"),v("pw")).catch(e=>doc
 function logout(){auth.signOut()}
 async function loadAll(){
  const grab=async n=>{const q=await db.collection(n).get();return q.docs.map(d=>({id:d.id,...d.data()}))};
- [COURSES,LESSONS,QUESTIONS,BOOKS,SITES,CATS,LCATS,TILES,FLINKS,PAGES]=await Promise.all(["courses","lessons","questions","books","sites","categories","linkcats","tiles","footerlinks","pages"].map(grab));
+ [COURSES,LESSONS,QUESTIONS,BOOKS,SITES,CATS,LCATS,TILES,FLINKS,PAGES,FEED]=await Promise.all(["courses","lessons","questions","books","sites","categories","linkcats","tiles","footerlinks","pages","feed"].map(grab));
  const s=await db.collection("config").doc("main").get();SET=s.exists?s.data():{heroTitle:"Development Allies BD",heroText:"",showBooks:true,showSites:true};
  renderShell(window.__sec||"settings")}
-const NAV=[["settings","Site Settings"],["courses","Courses"],["lessons","Lessons"],["questions","Questions"],["categories","Book Categories"],["books","Books"],["linkcats","Link Categories"],["sites","Links"],["tiles","Homepage Tiles"],["pages","Site Pages"],["flinks","Footer Buttons"]];
+const NAV=[["settings","Site Settings"],["courses","Courses"],["lessons","Lessons"],["questions","Questions"],["categories","Book Categories"],["books","Books"],["linkcats","Link Categories"],["sites","Links"],["tiles","Homepage Tiles"],["feed","Feed"],["pages","Site Pages"],["flinks","Footer Buttons"]];
 function renderShell(sec){window.__sec=sec;app.innerHTML=`<div class="dash"><aside class="card">${NAV.map(x=>`<a href="javascript:renderShell('${x[0]}')" class="${x[0]==sec?"on":""}">${x[1]}</a>`).join("")}<a href="javascript:logout()" style="color:#ff9a9a">Log out</a></aside><div id="panel"></div></div>`;
  document.getElementById("panel").innerHTML=PANEL[sec]()}
 const panel=(t,form,list)=>`<h2>${esc(t)}</h2><div class="card">${form}</div><div class="list">${list||"<p class=muted>Nothing yet.</p>"}</div>`;
@@ -49,13 +49,14 @@ PANEL.settings=()=>`<h2>Site Settings</h2><div class="card list">
 <div id="prev8">${imgPrevHtml(SET.heroImageUrl,140)}</div>
 <label><input type="checkbox" id="s3" ${SET.showBooks!==false?"checked":""}> Show Books section</label>
 <label><input type="checkbox" id="s4" ${SET.showSites!==false?"checked":""}> Show Links section</label>
+<label><input type="checkbox" id="s9" ${SET.showFeed!==false?"checked":""}> Show “Latest updates” (newest Feed posts) on Home</label>
 <button class="btn" onclick="saveSettings()">Save</button></div>
 <div class="note" style="color:var(--mut);font-size:14px;margin-top:8px"><b>Image links:</b> you can now paste a normal Google Drive "Share" link (file must be set to <i>Anyone with the link</i>), a Dropbox share link, a GitHub file link, or any direct image address ending in .png / .jpg / .webp / .svg. The site converts it automatically and shows a preview above. Links to web <i>pages</i> (Facebook, Pinterest, Google Photos, Google Images) are not images and will not work. Tip: an image uploaded to your own GitHub repository, e.g. <code>logo.png</code>, also works and never breaks.</div>`;
 /* v7.3: live image preview in Site Settings */
 function imgPrevHtml(url,h){url=(url||"").trim();if(!url)return"";const u=imgUrl(url);
  return `<div class="muted" style="font-size:13px">Preview:</div><img src="${esc(u)}" alt="" referrerpolicy="no-referrer" style="max-height:${h}px;max-width:100%;border-radius:8px;background:rgba(255,255,255,.06)" onerror="this.outerHTML='<span style=&quot;color:#ffb0b0;font-size:13px&quot;>Could not load this image. Check that it is shared as Anyone with the link and that it is a real image, not a web page.</span>'">`}
 function imgPrev(inputId,boxId,h){const b=document.getElementById(boxId);if(b)b.innerHTML=imgPrevHtml(v(inputId),h)}
-async function saveSettings(){await db.collection("config").doc("main").set({heroTitle:v("s1"),heroText:v("s2"),aboutTitle:v("s5"),aboutText:v("s6"),logoUrl:v("s7"),heroImageUrl:v("s8"),showBooks:cb("s3"),showSites:cb("s4")});alert("Saved. Refresh the public site to see changes.");loadAll()}
+async function saveSettings(){await db.collection("config").doc("main").set({heroTitle:v("s1"),heroText:v("s2"),aboutTitle:v("s5"),aboutText:v("s6"),logoUrl:v("s7"),heroImageUrl:v("s8"),showBooks:cb("s3"),showSites:cb("s4"),showFeed:cb("s9")});alert("Saved. Refresh the public site to see changes.");loadAll()}
 
 /* ---------- COURSES (with edit) ---------- */
 PANEL.courses=()=>{const e=COURSES.find(c=>c.id==EDIT.course);
@@ -149,6 +150,7 @@ const addForm=sel=="all"?`<p class="muted">Choose a specific lesson above to add
 <label>Set number (groups questions — trainees pick a set to practise)<br><input id="q0" type="number" min="1" value="${setNo}" style="width:100px"></label>
 <input id="q3" placeholder="Question text" value="${esc(e?e.q:"")}">
 ${qform(type,e)}
+${noteBox("note_question",e)}
 <button class="btn" onclick="saveQuestion('${type}')">${e?"Update question":"Add question"}</button>
 ${e?`<button class="btn sm ghost" onclick="mopts=[['','']];EDIT.question=null;renderShell('questions')">Cancel edit</button>`:""}`;
 const opt=(val,label,cur)=>`<option value="${esc(val)}" ${String(cur)==String(val)?"selected":""}>${esc(label)}</option>`;
@@ -199,7 +201,7 @@ const setNo=parseInt(v("q0"))||1;
 if(!EDIT.question){const existing=QUESTIONS.filter(q=>q.lessonId==lessonId&&q.type==type&&(q.setNo||1)==setNo);
  if(existing.length&&!confirm(`Set ${setNo} already has ${existing.length} ${type} question(s) for this lesson. Add another to it?`))return}
 const lesson=LESSONS.find(l=>l.id==lessonId);
-const data={type,lessonId,courseId:lesson?lesson.courseId:"",setNo,q:v("q3"),opts,ans};
+const data={type,lessonId,courseId:lesson?lesson.courseId:"",setNo,q:v("q3"),opts,ans,note:v("note_question")};
 if(EDIT.question){await db.collection("questions").doc(EDIT.question).update(data);EDIT.question=null}else{await db.collection("questions").add(data)}
 window.__qSet=setNo;mopts=[["",""]];await loadAll()}
 
@@ -368,7 +370,7 @@ await loadAll()}
 
 /* ---------- HOMEPAGE TILES (add / edit / delete, custom color, quick link to sections and your pages) ---------- */
 const pageHref=p=>"#/page/"+encodeURIComponent(p.slug);
-function linkChoices(){return `<optgroup label="Site sections">${[["#/home","Home"],["#/courses","Courses"],["#/practice","Practice"],["#/books","Books"],["#/sites","Links"]].map(x=>`<option value="${x[0]}">${x[1]}</option>`).join("")}</optgroup>`+
+function linkChoices(){return `<optgroup label="Site sections">${[["#/home","Home"],["#/feed","Feed"],["#/courses","Courses"],["#/practice","Practice"],["#/books","Books"],["#/sites","Links"]].map(x=>`<option value="${x[0]}">${x[1]}</option>`).join("")}</optgroup>`+
  (PAGES.length?`<optgroup label="Your site pages">${PAGES.map(p=>`<option value="${esc(pageHref(p))}">${esc(p.title)}</option>`).join("")}</optgroup>`:"")}
 PANEL.tiles=()=>{const e=TILES.find(t=>t.id==EDIT.tile);
 return panel("Homepage Tiles",`<p class="muted" style="margin-top:0">Extra cards on your homepage. A tile can open one of your <b>Site Pages</b>, a section of the site, or any outside link.</p>
@@ -386,6 +388,47 @@ TILES.map(t=>`<div class="item"><span>${t.color?`<span style="display:inline-blo
 async function saveTile(){if(!v("t1"))return alert("Enter a title");const data={title:v("t1"),desc:v("t2"),link:v("t3"),color:cb("tc4")?v("tc5"):"",note:v("note_tile")};
 if(EDIT.tile){await db.collection("tiles").doc(EDIT.tile).update(data);EDIT.tile=null}else{await db.collection("tiles").add(data)}
 await loadAll()}
+
+/* ---------- FEED (v8.0): post useful links, tips, announcements; pin; share-ready ---------- */
+const FEED_TYPES=["Useful link","Announcement","Tip","Resource","Video","Article"];
+const FEED_ICON={"Useful link":"🔗","Announcement":"📣","Tip":"💡","Resource":"📚","Video":"🎬","Article":"📰"};
+const dateInput=ms=>{const d=ms?new Date(ms):new Date(),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())};
+const fmtDate=ms=>ms?new Date(ms).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"";
+const feedSortedAdmin=()=>FEED.slice().sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.date||0)-(a.date||0));
+function feedTagHints(){const all={};FEED.forEach(x=>(x.tags||[]).forEach(t=>all[t]=(all[t]||0)+1));const ks=Object.keys(all).sort((a,b)=>all[b]-all[a]||a.localeCompare(b)).slice(0,30);
+ return ks.length?`<div class="muted" style="font-size:13px">Existing tags (click to add): ${ks.map(t=>`<a class="tagchip" href="javascript:addTagTo('fd_tags','${esc(t)}')">#${esc(t)}</a>`).join(" ")}</div>`:""}
+function feedRows(){const toks=(window.__fdSearch||"").trim().toLowerCase().split(/\s+/).filter(Boolean);let l=feedSortedAdmin();
+ if(toks.length)l=l.filter(p=>{const h=[p.title,p.note,p.type,(p.tags||[]).map(t=>"#"+t).join(" ")].join(" ").toLowerCase();return toks.every(t=>h.includes(t))});
+ return `<p class="muted" style="font-size:13px;margin:4px 0">Showing ${l.length} of ${FEED.length} posts</p>`+(l.map(p=>`<div class="item"><span>${p.pinned?"📌 ":""}${FEED_ICON[p.type]||"🔗"} <b>${esc(p.title)}</b> <small>${esc(p.type||"")} · ${esc(fmtDate(p.date))}${(p.tags||[]).length?" · "+p.tags.map(t=>"#"+esc(t)).join(" "):""}</small></span><span>
+<button class="btn sm ghost" onclick="feedPin('${p.id}')">${p.pinned?"Unpin":"Pin"}</button>
+<button class="btn sm ghost" onclick="copyLink('${esc(new URL("index.html#/feed/post/"+p.id,location.href).href)}')">Copy link</button>
+${editBtn("feed",p.id)} ${del("feed",p.id)}</span></div>`).join("")||"<p class=muted>No posts match.</p>")}
+function fdSearch(val){window.__fdSearch=val;const el=document.getElementById("fdresults");if(el)el.innerHTML=feedRows()}
+PANEL.feed=()=>{const e=FEED.find(p=>p.id==EDIT.feed);
+return panel("Feed",`<p class="muted" style="margin-top:0">Post useful links, tips and updates. They appear on the public <b>Feed</b> page, and the newest 3 show as “Latest updates” on the homepage. Each post has a Share button for visitors.</p>
+<div class="list">
+<select id="fd_type">${FEED_TYPES.map(t=>`<option ${e&&e.type==t?"selected":""}>${t}</option>`).join("")}</select>
+<input id="fd_title" placeholder="Post title" value="${esc(e?e.title:"")}">
+<textarea id="fd_note" rows="4" style="width:100%" placeholder="Short text (optional) — formatting like **bold** and [text](https://link) works">${esc(e?e.note||"":"")}</textarea>
+<select onchange="if(this.value)document.getElementById('fd_link').value=this.value"><option value="">— Quick link: one of your pages or sections (fills the link below) —</option>${linkChoices()}</select>
+<input id="fd_link" placeholder="Link (outside link, or your own page like #/page/my-page)" value="${esc(e?e.link||"":"")}">
+<input id="fd_image" placeholder="Image link (optional; YouTube links show their thumbnail automatically)" value="${esc(e?e.image||"":"")}" oninput="imgPrev('fd_image','fd_prev',120)">
+<div id="fd_prev">${imgPrevHtml(e?e.image:"",120)}</div>
+<input id="fd_tags" placeholder="Optional #tags (e.g. #cbta, #tips)" value="${esc(tagsTxt(e))}">
+${feedTagHints()}
+<label>Date <input type="date" id="fd_date" value="${dateInput(e?e.date:0)}"></label>
+<label><input type="checkbox" id="fd_pin" ${e&&e.pinned?"checked":""}> 📌 Pin this post on top</label>
+<button class="btn" onclick="saveFeed()">${e?"Update post":"Post"}</button>
+${e?`<button class="btn sm ghost" onclick="cancelEdit('feed')">Cancel edit</button>`:""}
+</div>
+<div class="list" style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px"><b>Your posts</b>
+<input id="fdsearch" placeholder="Search your posts…" value="${esc(window.__fdSearch||"")}" oninput="fdSearch(this.value)"></div>`,
+`<div id="fdresults">${feedRows()}</div>`)}
+async function saveFeed(){if(!v("fd_title"))return alert("Enter a post title");
+ const data={type:v("fd_type"),title:v("fd_title"),note:v("fd_note"),link:v("fd_link"),image:v("fd_image"),tags:parseTags(v("fd_tags")),pinned:cb("fd_pin"),date:v("fd_date")?Date.parse(v("fd_date")+"T12:00:00"):Date.now()};
+ if(EDIT.feed){await db.collection("feed").doc(EDIT.feed).update(data);EDIT.feed=null}else{await db.collection("feed").add(data)}
+ await loadAll()}
+async function feedPin(id){const p=FEED.find(x=>x.id==id);if(!p)return;await db.collection("feed").doc(id).update({pinned:!p.pinned});await loadAll()}
 
 /* ---------- SITE PAGES (hidden from the menu; open them through a tile / button / link) ---------- */
 function slugify(t){return String(t||"").toLowerCase().trim().replace(/[\s_]+/g,"-").replace(/[^\p{L}\p{M}\p{N}-]/gu,"").replace(/-+/g,"-").replace(/^-|-$/g,"")}
