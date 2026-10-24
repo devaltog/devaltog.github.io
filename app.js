@@ -1,7 +1,7 @@
-/* Allies Learn Together by S M Fuad Hasan - public site (app.js) v7.5.2: Practice "Next question" fix for written questions + Check answer / Next question buttons; v7.5.3: question comments; v7.5: pop-up notes, lesson colors, practice shows only courses/lessons with questions, search for Courses + Practice; v7.5.2: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
+/* Allies Learn Together by Fuad Hasan - public site (app.js) v8.0: Feed (social-style posts, share button, homepage "Latest updates"); v7.5.4: Practice "Next question" fix for written questions + Check answer / Next question buttons; v7.5.3: question comments; v7.5: pop-up notes, lesson colors, practice shows only courses/lessons with questions, search for Courses + Practice; v7.4: image-link fixes + 5 items per category/subcategory with See more, smaller book/link cards, hidden site pages (#/page/slug), colored homepage tiles */
 const app=document.getElementById("app"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let SET={heroTitle:"Development Allies BD",heroText:"Courses, practice and resources for trainees.",showBooks:true,showSites:true};
-let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[],PAGES=[];
+let COURSES=[],LESSONS=[],QUESTIONS=[],BOOKS=[],SITES=[],TILES=[],FLINKS=[],CATS=[],LCATS=[],PAGES=[],FEED=[];
 const FICON={Mobile:"📞",WhatsApp:"💬",Email:"✉️",LinkedIn:"💼",Facebook:"📘",Website:"🌐",Custom:"🔗"};
 const FCOLOR={Mobile:"rgba(255,255,255,.16)",WhatsApp:"#145214",Email:"#7a1f1f",LinkedIn:"#0a3d62",Facebook:"#1456a3",Website:"#8a5a2b",Custom:"#3a3a3a"};
 function flinkHref(it){const v=(it.link||"").trim();
@@ -26,7 +26,7 @@ async function loadAll(){
  const ord=a=>a.sort((x,y)=>natSort(x.order,y.order));
  const grab=async(name)=>{try{const q=await db.collection(name).get();return q.docs.map(d=>({id:d.id,...d.data()}))}catch(e){return[]}};
  COURSES=ord((await grab("courses")).filter(c=>!c.hidden));
- LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");FLINKS=await grab("footerlinks");CATS=await grab("categories");LCATS=await grab("linkcats");PAGES=await grab("pages");
+ LESSONS=ord(await grab("lessons"));QUESTIONS=await grab("questions");BOOKS=await grab("books");SITES=await grab("sites");TILES=await grab("tiles");FLINKS=await grab("footerlinks");CATS=await grab("categories");LCATS=await grab("linkcats");PAGES=await grab("pages");FEED=await grab("feed");
  document.getElementById("brandLink").innerHTML=(SET.logoUrl?`<img src="${esc(imgUrl(SET.logoUrl))}" alt="logo" referrerpolicy="no-referrer" onerror="this.style.display='none'" style="height:30px;width:auto;max-width:140px;object-fit:contain;vertical-align:middle;margin-right:8px;border-radius:6px">`:"")+esc(SET.heroTitle||"Development Allies BD");
  document.title=SET.heroTitle||"Development Allies BD";
  renderFooterLinks();
@@ -77,7 +77,47 @@ function md(raw){if(!raw)return"";return raw.split(/\n{2,}/).map(block=>{
 const V={};
 V.home=()=>`<section class="hero"><h1>${esc(SET.heroTitle)}</h1><p class="lead">${esc(SET.heroText)}</p><div style="display:flex;gap:10px;flex-wrap:wrap">${SET.heroImageUrl?`<div style="width:100%;margin:16px 0"><img src="${esc(imgUrl(SET.heroImageUrl))}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'" style="max-width:100%;border-radius:16px;display:block"></div>`:""}<a class="btn" href="#/courses">Explore courses</a><a class="btn ghost" href="#/practice">Start practice</a></div></section>
 ${SET.aboutText?`<div class="card rich" style="margin:20px 0"><h2>${esc(SET.aboutTitle||"About")}</h2><div style="color:var(--mut)">${md(SET.aboutText)}</div></div>`:""}
-<div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Links",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile"${cstyle(t.color)} href="${esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}>${nb("tiles",t)}<h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>`;
+<div class="grid">${[["courses","Courses",COURSES.length+" courses"],["practice","Practice",QUESTIONS.length+" questions"]].concat(SET.showBooks?[["books","Books",BOOKS.length+" books"]]:[]).concat(SET.showSites?[["sites","Links",SITES.length+" links"]]:[]).map(x=>`<a class="card tile" href="#/${x[0]}"><h3>${x[1]}</h3><p>${x[2]}</p></a>`).join("")}${TILES.map(t=>`<a class="card tile"${cstyle(t.color)} href="${esc(t.link)}" ${esc(t.link).startsWith('#')?"":'target="_blank" rel="noopener"'}>${nb("tiles",t)}<h3>${esc(t.title)}</h3><p>${esc(t.desc||"")}</p></a>`).join("")}</div>${feedStrip()}`;
+/* ---------------- FEED (v8.0): social-style posts with Share button ---------------- */
+const FEED_ICON={"Useful link":"🔗","Announcement":"📣","Tip":"💡","Resource":"📚","Video":"🎬","Article":"📰"};
+function ytThumb(u){const m=String(u||"").match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/);return m?"https://img.youtube.com/vi/"+m[1]+"/hqdefault.jpg":""}
+function ago(ms){if(!ms)return"";const s=(Date.now()-ms)/1000;if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+" min ago";if(s<86400)return Math.floor(s/3600)+" hour"+(s<7200?"":"s")+" ago";
+ if(s<86400*30){const d=Math.floor(s/86400);return d+" day"+(d==1?"":"s")+" ago"}return new Date(ms).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+const feedSorted=()=>FEED.slice().sort((x,y)=>(y.pinned?1:0)-(x.pinned?1:0)||(y.date||0)-(x.date||0));
+const postUrl=id=>location.href.split("#")[0]+"#/feed/post/"+id;
+function feedCard(p){const type=p.type||"Useful link",img=p.image?imgUrl(p.image):ytThumb(p.link),ext=p.link&&!String(p.link).startsWith("#"),tags=Array.isArray(p.tags)?p.tags:[];
+ const open=p.link?`href="${esc(p.link)}" ${ext?'target="_blank" rel="noopener"':""}`:"";
+ return `<article class="card post" id="post-${esc(p.id)}"><div class="posthead"><span class="ptype">${FEED_ICON[type]||"🔗"} ${esc(type)}</span>${p.pinned?'<span class="ppin">📌 Pinned</span>':""}<span class="pdate">${esc(ago(p.date))}</span></div>`+
+  (img?`<${p.link?"a "+open:"div"}><img class="pimg" src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'"></${p.link?"a":"div"}>`:"")+
+  `<h3><a href="#/feed/post/${esc(p.id)}">${esc(p.title)}</a></h3>${p.note?`<div class="pnote rich">${md(p.note)}</div>`:""}`+
+  (tags.length?`<div class="tags">${tags.map(t=>`<a class="tagchip" href="#/feed/tag/${encodeURIComponent(t)}">#${esc(t)}</a>`).join("")}</div>`:"")+
+  `<div class="pactions">${p.link?`<a class="btn sm" ${open}>Open</a>`:""}<button class="btn sm ghost" onclick="sharePost('${esc(p.id)}')">Share</button></div></article>`}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+function sharePost(id){const p=FEED.find(x=>x.id==id);if(!p)return;const url=postUrl(id),data={title:p.title,text:String(p.note||p.title).slice(0,140),url};
+ if(navigator.share){navigator.share(data).catch(()=>{});return}
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(()=>toast("Link copied — paste it anywhere to share"),()=>prompt("Copy this link:",url))}else prompt("Copy this link:",url)}
+function feedStrip(){if(SET.showFeed===false||!FEED.length)return"";
+ return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:30px 0 4px"><h2 style="margin:0">Latest updates</h2><a class="btn sm ghost" href="#/feed">See all →</a></div><div class="feedlist strip">${feedSorted().slice(0,3).map(feedCard).join("")}</div>`}
+function feedResults(){const toks=tok(SQ.feed);let list=feedSorted();
+ if(FF.type)list=list.filter(p=>(p.type||"Useful link")==FF.type);
+ if(FF.tag)list=list.filter(p=>(p.tags||[]).includes(FF.tag));
+ if(toks.length)list=list.filter(p=>{const h=[p.title,p.note,p.type,(p.tags||[]).map(t=>"#"+t).join(" ")].join(" ").toLowerCase();return toks.every(t=>h.includes(t))});
+ if(!list.length)return `<p class=muted>${FEED.length?"Nothing matches your search.":"No posts yet. Please check back soon!"}</p>`;
+ const shown=list.slice(0,FEEDLIM);
+ return `<p class="muted" style="font-size:13px;margin:4px 0">${list.length} post${list.length==1?"":"s"}</p><div class="feedlist">${shown.map(feedCard).join("")}</div>${shown.length<list.length?`<p><button class="btn ghost" onclick="feedMore()">Load more (${list.length-shown.length})</button></p>`:""}`}
+function feedSearch(val){SQ.feed=val;FEEDLIM=10;const el=document.getElementById("fresults");if(el)el.innerHTML=feedResults()}
+function feedMore(){FEEDLIM+=10;const el=document.getElementById("fresults");if(el)el.innerHTML=feedResults()}
+V.feed=(mode,x)=>{const back=`<p><a class="btn ghost" href="#/feed">← Back to Feed</a></p>`;
+ if(mode=="post"){const p=FEED.find(i=>i.id==x);return p?`<div class="feedlist" style="margin-top:20px">${feedCard(p)}</div>`+back:H("Post not found","This post does not exist or was removed.")+back}
+ FF.type=mode=="type"?x:"";FF.tag=mode=="tag"?x:"";
+ const types=[...new Set(FEED.map(p=>p.type||"Useful link"))],cnt={};FEED.forEach(p=>(p.tags||[]).forEach(t=>cnt[t]=(cnt[t]||0)+1));
+ const tags=Object.keys(cnt).sort((m,n)=>cnt[n]-cnt[m]||m.localeCompare(n)).slice(0,20);
+ const chip=(label,href,on)=>`<a class="tagchip ${on?"on":""}" href="${href}">${label}</a>`;
+ return H(FF.tag?"#"+FF.tag:FF.type||"Feed",FF.tag||FF.type?"Filtered posts.":"Latest updates, useful links and resources.")+
+  `<input class="search" placeholder="Search posts by title, text or #tag…" value="${esc(SQ.feed)}" oninput="feedSearch(this.value)">`+
+  (types.length>1?`<div class="typebar">${chip("All","#/feed",!FF.type&&!FF.tag)}${types.map(t=>chip((FEED_ICON[t]||"")+" "+esc(t),"#/feed/type/"+encodeURIComponent(t),FF.type==t)).join("")}</div>`:"")+
+  (tags.length?`<div class="tagcloud">${tags.map(t=>`<a class="tagchip ${FF.tag==t?"on":""}" href="#/feed/tag/${encodeURIComponent(t)}">#${esc(t)}<small>${cnt[t]}</small></a>`).join("")}</div>`:"")+
+  `<div id="fresults">${feedResults()}</div>`};
 V.courses=()=>H("Courses","Pick a course to see lessons and resources.")+`<input class="search" placeholder="Search courses or lessons…" value="${esc(SQ.courses)}" oninput="cSearch(this.value)"><div id="cresults">${courseResults()}</div>`;
 function cSearch(val){SQ.courses=val;const el=document.getElementById("cresults");if(el)el.innerHTML=courseResults()}
 function courseResults(){const toks=tok(SQ.courses);
@@ -140,7 +180,7 @@ function renderQuiz(){if(!QUIZ)return;
  app.innerHTML=`<p class="muted">Question ${QUIZ.idx+1} of ${QUIZ.qs.length}</p><div class="card">${nb("questions",q)}<h3>${esc(q.q)}</h3>${qInput(q)}</div>${q.type=="Written"?`<p class="qbtns"><button class="btn ghost" onclick="checkWritten()">Check answer</button> <button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button></p>`:`<button class="btn" onclick="quizNext()">${isLast?"Finish set":"Next question"}</button>`}`}
 
 /* ---------------- BOOKS + LINKS: categories (ordered), subcategories, #tags, search ---------------- */
-const SQ={books:"",sites:"",courses:"",practice:""};
+const SQ={books:"",sites:"",courses:"",practice:"",feed:""};let FEEDLIM=10;const FF={type:"",tag:""};
 const tagsOf=x=>Array.isArray(x.tags)?x.tags:[];
 const catName=x=>x.cat||"General";
 const catOrd=x=>(x.order===undefined||x.order===null||x.order==="")?1e9:Number(x.order);
@@ -192,7 +232,7 @@ V.page=slug=>{const p=PAGES.find(x=>x.slug==slug);
  return `<h2>${esc(p.title)}</h2><div class="card rich pagebody">${md(p.body||"")||"<p class=muted>This page is empty.</p>"}</div><p><a class="btn ghost" href="#/home">← Back to Home</a></p>`};
 function go(h){location.hash=h}
 function route(){const parts=location.hash.slice(2).split("/").map(decodeURIComponent),p=parts[0]||"home";
- QUIZ=null;SQ.books=SQ.sites=SQ.courses=SQ.practice="";
+ QUIZ=null;SQ.books=SQ.sites=SQ.courses=SQ.practice=SQ.feed="";FEEDLIM=10;
  app.innerHTML=p=="practice"?V.practice(parts.slice(1)):(V[p]||V.home)(parts[1],parts[2],parts[3]);
  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.getAttribute("href")=="#/"+(p=="course"?"courses":p)))}
 addEventListener("hashchange",()=>{route();scrollTo(0,0)});
